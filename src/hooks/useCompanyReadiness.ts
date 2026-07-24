@@ -79,12 +79,17 @@ export function useCompanyReadiness(progressMap: ProgressMap) {
   useEffect(() => {
     let cancelled = false;
     const run = async () => {
-      const { fetchCompanyList } = await import("../app/services/fetchCompanies");
-      const list = await fetchCompanyList();
-      if (!cancelled) {
-        setAllCompanies(list);
-        setLoading(false);
+      try {
+        const { fetchCompanyList } = await import("../app/services/fetchCompanies");
+        const list = await fetchCompanyList();
+        if (!cancelled) setAllCompanies(list);
+      } catch (err) {
+        if (!cancelled) {
+          setAllCompanies(["Google", "Amazon", "Microsoft", "Meta", "Apple"]);
+          console.warn("Failed to fetch company list, using defaults:", err);
+        }
       }
+      if (!cancelled) setLoading(false);
     };
     run();
     return () => { cancelled = true; };

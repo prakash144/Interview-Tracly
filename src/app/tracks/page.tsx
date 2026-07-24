@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useMemo, useCallback } from "react";
-import { Plus, ChevronLeft, Settings2, BookOpen, Search, RotateCcw, ArrowUpDown, ChevronDown, Archive, Heart, Sparkles, Target, CheckCircle2, Clock3 } from "lucide-react";
+import { Plus, ChevronLeft, Settings2, BookOpen, Search, RotateCcw, ArrowUpDown, ChevronDown, Archive, Heart, Sparkles, Target, CheckCircle2, Clock3, BookMarked, MessageSquareText, Timer } from "lucide-react";
 import AppShell from "@/components/layout/AppShell";
 import Footer from "@/app/components/Footer";
 import PageHeader from "@/components/layout/PageHeader";
@@ -9,6 +9,7 @@ import TrackCard from "@/app/components/tracks/TrackCard";
 import ResourceCard from "@/app/components/tracks/ResourceCard";
 import ResourceDialog from "@/app/components/tracks/ResourceDialog";
 import ManageTracksDialog from "@/app/components/tracks/ManageTracksDialog";
+import ConfirmDialog from "@/components/ui/confirm-dialog";
 import { TracksSkeleton } from "@/components/states/PageSkeletons";
 import { useAuth } from "@/hooks/useAuth";
 import { useTracks } from "@/hooks/useTracks";
@@ -17,6 +18,10 @@ import { useResourceProgress } from "@/hooks/useResourceProgress";
 import * as resourceService from "@/services/firebase/resourceService";
 import type { DifficultyLevel, ResourceStatus, ResourceLink, KnowledgeResource } from "@/lib/knowledgeBase";
 import { COMPANIES, STATUS_LABELS } from "@/lib/knowledgeBase";
+import { CheatSheetView } from "@/app/components/tracks/CheatSheetView";
+import { BehavioralView } from "@/app/components/tracks/BehavioralView";
+import SystemDesignView from "@/app/components/tracks/SystemDesignView";
+import MockTestView from "@/app/components/tracks/MockTestView";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import {
@@ -52,6 +57,9 @@ const TrackDetailView = ({
   const [sortDir, setSortDir] = useState<SortDir>("desc");
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingResource, setEditingResource] = useState<KnowledgeResource | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
+
+  const deletingResource = deleteTarget ? resources.find((r) => r.id === deleteTarget) ?? null : null;
 
   const handleAdd = () => {
     setEditingResource(null);
@@ -74,7 +82,16 @@ const TrackDetailView = ({
     }
   };
 
-  const handleDelete = (resourceId: string) => deleteResource(resourceId);
+  const handleDeleteRequest = (resourceId: string) => {
+    setDeleteTarget(resourceId);
+  };
+
+  const handleDeleteConfirm = () => {
+    if (deleteTarget) {
+      deleteResource(deleteTarget);
+      setDeleteTarget(null);
+    }
+  };
 
   const filteredResources = useMemo(() => {
     let result = [...resources];
@@ -138,7 +155,7 @@ const TrackDetailView = ({
         actions={
           <Button onClick={handleAdd} className="h-9 text-xs bg-primary text-primary-foreground hover:bg-primary/80 cursor-pointer rounded-md">
             <Plus className="size-3.5 mr-1" />
-            Add Question
+            Add Resource
           </Button>
         }
       />
@@ -233,20 +250,31 @@ const TrackDetailView = ({
           {filteredResources.length > 0 ? (
             <div className="grid gap-3 sm:grid-cols-2">
               {filteredResources.map((resource) => (
-                <ResourceCard key={resource.id} resource={resource} progress={progressMap[resource.id]} progressEnabled={Boolean(auth.user)} onRequireAuth={auth.login} onStatusChange={setStatus} onToggleFavorite={toggleFavorite} onToggleRevision={toggleRevision} onSaveNotes={savePersonalNotes} onEdit={handleEdit} onDelete={handleDelete} />
+                <ResourceCard key={resource.id} resource={resource} progress={progressMap[resource.id]} progressEnabled={Boolean(auth.user)} onRequireAuth={auth.login} onStatusChange={setStatus} onToggleFavorite={toggleFavorite} onToggleRevision={toggleRevision} onSaveNotes={savePersonalNotes} onEdit={handleEdit} onDelete={handleDeleteRequest} />
               ))}
             </div>
           ) : (
             <div className="rounded-xl border border-dashed border-border bg-card/70 px-4 py-16 text-center">
               <BookOpen className="mx-auto size-10 text-muted-foreground/30 mb-3" />
               <p className="text-sm text-muted-foreground">{hasActiveFilters ? "No questions match the current filters." : "No questions yet. Add your first question!"}</p>
-              {!hasActiveFilters && <Button onClick={handleAdd} className="mt-4 h-8 text-xs bg-primary text-primary-foreground hover:bg-primary/80 cursor-pointer rounded-md"><Plus className="size-3 mr-1" />Add Question</Button>}
+              {!hasActiveFilters && <Button onClick={handleAdd} className="mt-4 h-8 text-xs bg-primary text-primary-foreground hover:bg-primary/80 cursor-pointer rounded-md"><Plus className="size-3 mr-1" />Add Resource</Button>}
             </div>
           )}
         </div>
       </div>
 
       <ResourceDialog open={dialogOpen} onOpenChange={setDialogOpen} initialData={editingResource ? { id: editingResource.id, title: editingResource.title, company: editingResource.company, difficulty: editingResource.difficulty, tags: editingResource.tags, resourceLinks: editingResource.resourceLinks, askedAt: editingResource.askedAt, notes: editingResource.notes } : undefined} onSave={handleSave} />
+
+      <ConfirmDialog
+        open={deleteTarget !== null}
+        onOpenChange={() => setDeleteTarget(null)}
+        onConfirm={handleDeleteConfirm}
+        title={deletingResource ? `Delete "${deletingResource.title}"` : "Delete Resource"}
+        message="Are you sure you want to permanently delete this resource? This action cannot be undone."
+        confirmLabel="Delete"
+        cancelLabel="Cancel"
+        variant="destructive"
+      />
     </>
   );
 };
@@ -257,6 +285,7 @@ const TracksPage = () => {
   const { resources } = useResources(auth.user?.uid);
   const { progressMap, setStatus, toggleRevision, toggleFavorite, savePersonalNotes } = useResourceProgress(auth.user?.uid);
   const [selectedTrackId, setSelectedTrackId] = useState<string | null>(null);
+  const [activeSpecialView, setActiveSpecialView] = useState<"cheatsheets" | "behavioral" | "systemdesign" | "mocktest" | null>(null);
   const [showArchived, setShowArchived] = useState(false);
 
   const favoriteResources = useMemo(
@@ -310,6 +339,49 @@ const TracksPage = () => {
   }, [tracks, resources, progressMap]);
 
   const archivedCount = tracks.filter((t) => t.archived).length;
+
+  if (activeSpecialView === "cheatsheets") {
+    return (
+      <AppShell footer={<Footer />}>
+        <div className="mx-auto max-w-7xl p-4 sm:px-6 lg:px-8 pb-10 animate-in fade-in slide-in-from-bottom-2 duration-500">
+          <CheatSheetView onBack={() => setActiveSpecialView(null)} />
+        </div>
+      </AppShell>
+    );
+  }
+
+  if (activeSpecialView === "behavioral") {
+    return (
+      <AppShell footer={<Footer />}>
+        <div className="mx-auto max-w-7xl p-4 sm:px-6 lg:px-8 pb-10 animate-in fade-in slide-in-from-bottom-2 duration-500">
+          <BehavioralView onBack={() => setActiveSpecialView(null)} />
+        </div>
+      </AppShell>
+    );
+  }
+
+  if (activeSpecialView === "systemdesign") {
+    return (
+      <AppShell footer={<Footer />}>
+        <div className="mx-auto max-w-7xl p-4 sm:px-6 lg:px-8 pb-10 animate-in fade-in slide-in-from-bottom-2 duration-500">
+          <SystemDesignView />
+          <div className="mt-4">
+            <button onClick={() => setActiveSpecialView(null)} className="text-xs text-muted-foreground hover:text-foreground">&larr; Back to Tracks</button>
+          </div>
+        </div>
+      </AppShell>
+    );
+  }
+
+  if (activeSpecialView === "mocktest") {
+    return (
+      <AppShell footer={<Footer />}>
+        <div className="mx-auto max-w-7xl p-4 sm:px-6 lg:px-8 pb-10 animate-in fade-in slide-in-from-bottom-2 duration-500">
+          <MockTestView onBack={() => setActiveSpecialView(null)} />
+        </div>
+      </AppShell>
+    );
+  }
 
   const selectedTrack = tracks.find((t) => t.id === selectedTrackId);
 
@@ -447,24 +519,85 @@ const TracksPage = () => {
               />
             );
           })}
+
+          {/* Special: Cheat Sheets */}
+          <button onClick={() => setActiveSpecialView("cheatsheets")}
+            className="group relative overflow-hidden rounded-xl border border-border/70 bg-card/90 p-5 text-left shadow-sm backdrop-blur transition-all duration-200 hover:-translate-y-0.5 hover:border-foreground/15 hover:shadow-md active:scale-[0.98]">
+            <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(135deg,rgba(99,102,241,0.08),transparent_50%)]" />
+            <div className="relative">
+              <div className="flex size-10 items-center justify-center rounded-lg border border-indigo-500/20 bg-indigo-500/10 mb-3">
+                <BookMarked className="size-5 text-indigo-400" />
+              </div>
+              <h3 className="text-sm font-semibold text-foreground">Cheat Sheets</h3>
+              <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
+                Company-specific quick-reference notes for interview prep
+              </p>
+              <span className="mt-3 inline-flex items-center gap-1 text-[10px] font-medium text-indigo-400 opacity-0 group-hover:opacity-100 transition-opacity">
+                Open <ChevronLeft className="size-3 rotate-180" />
+              </span>
+            </div>
+          </button>
+
+          {/* Special: Behavioral STAR */}
+          <button onClick={() => setActiveSpecialView("behavioral")}
+            className="group relative overflow-hidden rounded-xl border border-border/70 bg-card/90 p-5 text-left shadow-sm backdrop-blur transition-all duration-200 hover:-translate-y-0.5 hover:border-foreground/15 hover:shadow-md active:scale-[0.98]">
+            <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(135deg,rgba(236,72,153,0.08),transparent_50%)]" />
+            <div className="relative">
+              <div className="flex size-10 items-center justify-center rounded-lg border border-rose-500/20 bg-rose-500/10 mb-3">
+                <MessageSquareText className="size-5 text-rose-400" />
+              </div>
+              <h3 className="text-sm font-semibold text-foreground">Behavioral STAR</h3>
+              <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
+                Situation, Task, Action, Result — bank of behavioral answers
+              </p>
+              <span className="mt-3 inline-flex items-center gap-1 text-[10px] font-medium text-rose-400 opacity-0 group-hover:opacity-100 transition-opacity">
+                Open <ChevronLeft className="size-3 rotate-180" />
+              </span>
+            </div>
+          </button>
+
+          {/* Special: System Design */}
+          <button onClick={() => setActiveSpecialView("systemdesign")}
+            className="group relative overflow-hidden rounded-xl border border-border/70 bg-card/90 p-5 text-left shadow-sm backdrop-blur transition-all duration-200 hover:-translate-y-0.5 hover:border-foreground/15 hover:shadow-md active:scale-[0.98]">
+            <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(135deg,rgba(168,85,247,0.08),transparent_50%)]" />
+            <div className="relative">
+              <div className="flex size-10 items-center justify-center rounded-lg border border-violet-500/20 bg-violet-500/10 mb-3">
+                <svg className="size-5 text-violet-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M8.25 3v1.5M4.5 8.25H3m18 0h-1.5M4.5 12H3m18 0h-1.5m-15 3.75H3m18 0h-1.5M8.25 19.5V21M12 3v1.5m0 15V21m3.75-18v1.5m0 15V21m-9-1.5h10.5a2.25 2.25 0 0 0 2.25-2.25V7.5a2.25 2.25 0 0 0-2.25-2.25H6.75A2.25 2.25 0 0 0 4.5 7.5v9.75a2.25 2.25 0 0 0 2.25 2.25Z" /></svg>
+              </div>
+              <h3 className="text-sm font-semibold text-foreground">System Design</h3>
+              <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
+                Architecture deep-dives, data models, and design deep-dive notes
+              </p>
+              <span className="mt-3 inline-flex items-center gap-1 text-[10px] font-medium text-violet-400 opacity-0 group-hover:opacity-100 transition-opacity">
+                Open <ChevronLeft className="size-3 rotate-180" />
+              </span>
+            </div>
+          </button>
+
+          {/* Special: Mock Test */}
+          <button onClick={() => setActiveSpecialView("mocktest")}
+            className="group relative overflow-hidden rounded-xl border border-border/70 bg-card/90 p-5 text-left shadow-sm backdrop-blur transition-all duration-200 hover:-translate-y-0.5 hover:border-foreground/15 hover:shadow-md active:scale-[0.98]">
+            <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(135deg,rgba(34,211,238,0.08),transparent_50%)]" />
+            <div className="relative">
+              <div className="flex size-10 items-center justify-center rounded-lg border border-cyan-500/20 bg-cyan-500/10 mb-3">
+                <Timer className="size-5 text-cyan-400" />
+              </div>
+              <h3 className="text-sm font-semibold text-foreground">Mock Test</h3>
+              <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
+                Timed technical interviews with configurable difficulty and topics
+              </p>
+              <span className="mt-3 inline-flex items-center gap-1 text-[10px] font-medium text-cyan-400 opacity-0 group-hover:opacity-100 transition-opacity">
+                Open <ChevronLeft className="size-3 rotate-180" />
+              </span>
+            </div>
+          </button>
         </div>
 
-        {visibleTracks.length === 0 && !loading && (
+        {visibleTracks.length === 0 && !loading && showArchived && (
           <div className="mt-8 rounded-lg border border-dashed border-border bg-card/60 px-4 py-16 text-center shadow-sm">
             <BookOpen className="mx-auto size-10 text-muted-foreground/30 mb-3" />
-            <p className="text-sm text-muted-foreground">
-              {showArchived ? "No archived tracks" : "No tracks yet"}
-            </p>
-            <p className="text-xs text-muted-foreground/50 mt-1">
-              {showArchived
-                ? "Tracks you archive will appear here"
-                : "Create your first track to start organizing resources"}
-            </p>
-            {auth.user && !showArchived && (
-              <Button onClick={() => setManageOpen(true)} className="mt-4 h-8 text-xs bg-primary text-primary-foreground hover:bg-primary/80 cursor-pointer rounded-md">
-                <Plus className="size-3 mr-1" />Create Track
-              </Button>
-            )}
+            <p className="text-sm text-muted-foreground">No archived tracks</p>
+            <p className="text-xs text-muted-foreground/50 mt-1">Tracks you archive will appear here</p>
           </div>
         )}
       </div>

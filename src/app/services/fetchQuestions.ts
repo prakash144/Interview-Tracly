@@ -2,6 +2,7 @@
 import { useState, useEffect } from "react";
 import type { Problem } from "@/lib/progressTypes";
 import { getProblemId } from "@/lib/problemId";
+import { cachedFetchCSVWithStale } from "@/lib/csvCache";
 
 interface CsvItem {
     Title: string;
@@ -18,24 +19,9 @@ interface FetchQuestionsContext {
 }
 
 const fetchCSV = async (url: string): Promise<CsvItem[]> => {
-    const cacheKey = `interviewtracly:csv:${url}`;
-    const cachedText =
-        typeof window !== "undefined" ? window.sessionStorage.getItem(cacheKey) : null;
-    let text = cachedText;
-
-    if (text === null) {
-        const response = await fetch(url);
-
-        if (!response.ok) {
-            throw new Error(`Unable to load CSV: ${response.status} ${response.statusText} — ${url}`);
-        }
-
-        text = await response.text();
-
-        if (typeof window !== "undefined") {
-            window.sessionStorage.setItem(cacheKey, text);
-        }
-    }
+    const text = typeof window !== "undefined"
+        ? await cachedFetchCSVWithStale(url)
+        : await (await fetch(url)).text();
 
     const Papa = await import("papaparse");
     const result = Papa.parse<CsvItem>(text, {

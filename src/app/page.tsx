@@ -30,6 +30,10 @@ import DailyMissionWidget from "@/app/components/DailyMission";
 import { useGoals } from "@/hooks/useGoals";
 import { useTracks } from "@/hooks/useTracks";
 import { useRevisionTracker } from "@/hooks/useRevisionTracker";
+import { useNextUpQueue } from "@/hooks/useNextUpQueue";
+import { WeaknessRadarChart } from "@/app/components/WeaknessRadarChart";
+import { ReadinessGauge } from "@/app/components/ReadinessGauge";
+import { NextUpQueue } from "@/app/components/NextUpQueue";
 import type { Problem, UserProblemProgress } from "@/lib/progressTypes";
 import type { Sprint } from "@/lib/sprints";
 
@@ -171,6 +175,16 @@ const DashboardPage = () => {
       .sort((a, b) => b.solved - a.solved)
       .slice(0, 5);
   }, [stats.companyStats]);
+
+  const topicStrengths = useMemo(() => {
+    return stats.topicStats
+      .filter((t) => t.total >= 2)
+      .map((t) => ({ name: t.name, strength: t.total > 0 ? (t.solved / t.total) * 100 : 0 }))
+      .sort((a, b) => b.strength - a.strength)
+      .slice(0, 6);
+  }, [stats.topicStats]);
+
+  const nextUpProblems = useNextUpQueue(questionsState.questions, progress.progressMap, stats.topicStats, 5);
 
   const ringSegments = useMemo(() => {
     const colorMap: Record<string, string> = { Easy: "var(--color-success)", Medium: "var(--color-warning)", Hard: "var(--color-destructive)" };
@@ -649,9 +663,27 @@ const DashboardPage = () => {
                 ) : stats.companyStats.length > 0 ? (
                   <p className="text-sm text-muted-foreground text-center py-4">Start solving problems from different companies</p>
                 ) : (
-                  <p className="text-sm text-muted-foreground text-center py-4">No company data available</p>
+                    <p className="text-sm text-muted-foreground text-center py-4">No company data available</p>
                 )}
               </PremiumSurface>
+            </div>
+
+            {/* Row 5b: Radar Chart + Readiness Gauge + Next Up */}
+            <div className="grid gap-4 lg:grid-cols-3">
+              {topicStrengths.length >= 3 && (
+                <div className="rounded-lg border border-border/70 bg-card/90 p-5 shadow-sm backdrop-blur flex flex-col items-center">
+                  <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground mb-2">Topic Radar</p>
+                  <WeaknessRadarChart topics={topicStrengths} size={180} />
+                </div>
+              )}
+              <div className="rounded-lg border border-border/70 bg-card/90 p-5 shadow-sm backdrop-blur flex flex-col items-center justify-center">
+                <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground mb-2">Readiness</p>
+                <ReadinessGauge score={solvedPercent} size={130} />
+                <Link href="/readiness" className="mt-2 inline-flex items-center gap-1 text-[10px] text-info hover:text-info/80 transition-colors">
+                  Full report <ArrowRight className="size-3" />
+                </Link>
+              </div>
+              <NextUpQueue problems={nextUpProblems} />
             </div>
 
             {/* Active Sprint + Quick Actions */}

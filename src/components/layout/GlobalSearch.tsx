@@ -8,7 +8,7 @@ import type { Problem } from "@/lib/progressTypes";
 import { useResources } from "@/hooks/useResources";
 import { useTracks } from "@/hooks/useTracks";
 import { fetchUnifiedProblems } from "@/app/services/fetchUnifiedProblems";
-import { Dialog, DialogContent } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import DifficultyBadge from "@/components/data-display/DifficultyBadge";
 import CompanyLogo from "@/components/data-display/CompanyLogo";
@@ -97,6 +97,7 @@ const GlobalSearch = ({ uid, open, onOpenChange }: GlobalSearchProps) => {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-xl p-0 gap-0">
+        <DialogTitle className="sr-only">Search</DialogTitle>
         <div className="flex items-center border-b border-border px-4">
           <Search className="size-4 text-muted-foreground shrink-0" />
           <Input

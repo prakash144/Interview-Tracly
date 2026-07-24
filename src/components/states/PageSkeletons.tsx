@@ -172,3 +172,25 @@ export const CollectionsSkeleton = () => (
     </div>
   </div>
 );
+
+export const AnalyticsSkeleton = () => (
+  <div className="mx-auto max-w-7xl space-y-6 p-4 sm:px-6 lg:px-8">
+    <div className="grid gap-4 lg:grid-cols-3">
+      <SkeletonBlock className="h-52 rounded-xl" />
+      <div className="lg:col-span-2 grid grid-cols-2 sm:grid-cols-4 gap-3">
+        {Array.from({ length: 4 }).map((_, i) => (
+          <SkeletonBlock key={i} className="h-24 rounded-xl" />
+        ))}
+      </div>
+    </div>
+    <SkeletonBlock className="h-16 w-full rounded-xl" />
+    <div className="grid gap-4 lg:grid-cols-2">
+      <SkeletonBlock className="h-64 rounded-xl" />
+      <SkeletonBlock className="h-64 rounded-xl" />
+    </div>
+    <div className="grid gap-4 lg:grid-cols-2">
+      <SkeletonBlock className="h-64 rounded-xl" />
+      <SkeletonBlock className="h-64 rounded-xl" />
+    </div>
+  </div>
+);

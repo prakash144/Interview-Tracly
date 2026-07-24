@@ -142,23 +142,41 @@ export const useResources = (uid?: string | null, trackId?: TrackId) => {
 
   const deleteResource = useCallback(
     async (resourceId: string) => {
-      if (!resourceId.startsWith("sample-") && !window.confirm("Delete this resource?")) return;
       const prevSnapshot = [...resourcesRef.current];
+      const deleted = prevSnapshot.find((r) => r.id === resourceId);
       const optimistic = prevSnapshot.filter((r) => r.id !== resourceId);
       resourcesRef.current = optimistic;
       setResources(optimistic);
 
+      let deletedFromFirebase = false;
       if (uid && !resourceId.startsWith("sample-")) {
         try {
           await resourceService.deleteResource(uid, resourceId);
-          toast.success("Resource deleted");
+          deletedFromFirebase = true;
         } catch (err) {
           resourcesRef.current = prevSnapshot;
           setResources(prevSnapshot);
           setError(err instanceof Error ? err.message : "Failed to delete resource");
           toast.error("Failed to delete resource");
+          return;
         }
       }
+
+      toast("Resource deleted", {
+        action: {
+          label: "Undo",
+          onClick: async () => {
+            resourcesRef.current = prevSnapshot;
+            setResources(prevSnapshot);
+            if (uid && deleted && deletedFromFirebase) {
+              try {
+                await resourceService.addResource(uid, deleted);
+              } catch {}
+            }
+          },
+        },
+        duration: 5000,
+      });
     },
     [uid]
   );

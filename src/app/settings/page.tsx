@@ -13,6 +13,8 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { useTheme } from "@/hooks/useTheme";
 import { useProblemWorkspaceData } from "@/features/problems/hooks/useProblemWorkspaceData";
+import { loadCodingPrefs, saveCodingPrefs, COMPANIES, SHEET_OPTIONS, SORT_OPTIONS, PAGE_SIZE_OPTIONS } from "@/lib/codingPreferences";
+import type { CodingPrefs } from "@/lib/codingPreferences";
 
 const ACCENT_COLORS = [
   { label: "Green", value: "#22c55e", class: "bg-success" },
@@ -21,22 +23,6 @@ const ACCENT_COLORS = [
   { label: "Orange", value: "#f97316", class: "bg-orange-500" },
 ];
 
-const COMPANIES = [
-  "Google", "Microsoft", "Apple", "Amazon", "Meta", "Tesla", "IBM", "Intel", "Oracle", "Samsung",
-  "Stripe", "Airbnb", "OpenAI", "Notion", "Figma", "Duolingo", "Canva", "Plaid", "Gusto", "Razorpay",
-  "McKinsey", "BCG", "Bain", "Deloitte", "PwC", "EY", "KPMG", "Accenture", "ZS Associates", "Capgemini",
-  "Spotify", "Slack", "Reddit", "Zoom", "Pinterest", "Atlassian", "Salesforce", "Cisco", "Twilio", "Shopify",
-];
-
-const SHEET_OPTIONS = [
-  { label: "Last 30 Days", value: "1. Thirty Days.csv" },
-  { label: "Last 3 Months", value: "2. Three Months.csv" },
-  { label: "Last 6 Months", value: "3. Six Months.csv" },
-  { label: "More Than 6 Months", value: "4. More Than Six Months.csv" },
-  { label: "All Time", value: "5. All.csv" },
-];
-const SORT_OPTIONS = ["Frequency", "Acceptance Rate"];
-const PAGE_SIZE_OPTIONS = [10, 25, 50, 100];
 const GOAL_STORAGE_KEY = "goal-settings";
 
 function loadGoal(key: "weeklyTarget" | "dailyTarget", defaultVal: number): number {
@@ -59,32 +45,6 @@ function saveGoal(weekly: number, daily: number) {
       localStorage.setItem(GOAL_STORAGE_KEY, JSON.stringify({ weeklyTarget: weekly, dailyTarget: daily }));
     } catch {}
   }
-}
-
-type CodingPrefs = { company: string; sheet: string; sorting: string; pageSize: number };
-const PREFS_KEY = "coding-preferences";
-
-function normalizeSheet(sheet: string): string {
-  if (sheet === "All.csv") return "5. All.csv";
-  return sheet;
-}
-
-function loadPrefs(): CodingPrefs {
-  if (typeof window === "undefined") return { company: "Google", sheet: "5. All.csv", sorting: "Frequency", pageSize: 25 };
-  try {
-    const raw = localStorage.getItem(PREFS_KEY);
-    if (!raw) return { company: "Google", sheet: "5. All.csv", sorting: "Frequency", pageSize: 25 };
-    const parsed = JSON.parse(raw);
-    const merged = { company: "Google", sheet: "5. All.csv", sorting: "Frequency", pageSize: 25, ...parsed };
-    merged.sheet = normalizeSheet(merged.sheet);
-    return merged;
-  } catch {
-    return { company: "Google", sheet: "5. All.csv", sorting: "Frequency", pageSize: 25 };
-  }
-}
-
-function savePrefs(prefs: CodingPrefs) {
-  try { localStorage.setItem(PREFS_KEY, JSON.stringify(prefs)); } catch {}
 }
 
 function getStoredAccent(): string {
@@ -122,11 +82,11 @@ const SettingsContent = () => {
     saveGoal(w, d);
   }, []);
 
-  const [prefs, setPrefs] = useState<CodingPrefs>(loadPrefs);
+  const [prefs, setPrefs] = useState<CodingPrefs>(loadCodingPrefs);
   const updatePref = useCallback(<K extends keyof CodingPrefs>(key: K, value: CodingPrefs[K]) => {
     setPrefs((prev) => {
       const next = { ...prev, [key]: value };
-      savePrefs(next);
+      saveCodingPrefs(next);
       return next;
     });
   }, []);
@@ -156,7 +116,8 @@ const SettingsContent = () => {
       { label: "Hard", solved: 0, total: 0, color: "bg-error" },
     ];
     for (const q of questionsState.questions) {
-      const stat = difficultyStats.find((d) => d.label === q.difficulty);
+      const d = q.difficulty.charAt(0).toUpperCase() + q.difficulty.slice(1).toLowerCase();
+      const stat = difficultyStats.find((s) => s.label === d);
       if (stat) {
         stat.total += 1;
         if (progress.progressMap[q.problemId]?.solved) stat.solved += 1;
@@ -197,10 +158,22 @@ const SettingsContent = () => {
 
   const handleExport = useCallback(() => {
     if (exportFormat === "json") {
-      const data = exportScope === "full"
-        ? JSON.stringify({ progressMap: progress.progressMap, questions: questionsState.questions }, null, 2)
+      const studySessions = typeof window !== "undefined" ? JSON.parse(localStorage.getItem("study-sessions") || "[]") : [];
+      const cheatSheets = typeof window !== "undefined" ? JSON.parse(localStorage.getItem("cheat-sheets") || "[]") : [];
+      const behavioralEntries = typeof window !== "undefined" ? JSON.parse(localStorage.getItem("behavioral-entries") || "[]") : [];
+      const exportData = exportScope === "full"
+        ? JSON.stringify({
+            progressMap: progress.progressMap,
+            questions: questionsState.questions,
+            preferences: prefs,
+            goals: { weeklyTarget: weeklyGoal, dailyTarget: dailyGoal },
+            studySessions,
+            cheatSheets,
+            behavioralEntries,
+            exportedAt: new Date().toISOString(),
+          }, null, 2)
         : JSON.stringify(progress.progressMap, null, 2);
-      const blob = new Blob([data], { type: "application/json" });
+      const blob = new Blob([exportData], { type: "application/json" });
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
@@ -227,7 +200,7 @@ const SettingsContent = () => {
     a.download = "interview-tracly-progress.csv";
     a.click();
     URL.revokeObjectURL(url);
-  }, [exportFormat, exportScope, progress.progressMap, progress, questionsState.questions]);
+  }, [exportFormat, exportScope, progress, questionsState.questions, prefs, weeklyGoal, dailyGoal]);
 
   const tabs: { id: TabId; label: string; icon: typeof UserIcon }[] = [
     { id: "profile", label: "Profile", icon: UserIcon },
@@ -353,25 +326,31 @@ const SettingsContent = () => {
                     </div>
                     <div className="min-w-0">
                       <h3 className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-4">Difficulty Breakdown</h3>
-                      <div className="space-y-4">
-                        {profileStats.difficultyStats.filter((d) => d.total > 0).length > 0 ? (
-                          profileStats.difficultyStats.filter((d) => d.total > 0).map((d) => {
+                      <div className="space-y-5">
+                        {(() => {
+                          const diffs = profileStats.difficultyStats.filter((d) => d.total > 0);
+                          return diffs.length > 0 ? diffs.map((d) => {
                             const pct = Math.round((d.solved / d.total) * 100);
                             return (
                               <div key={d.label}>
-                                <div className="flex items-center justify-between text-xs mb-1">
-                                  <span className="text-muted-foreground">{d.label}</span>
-                                  <span className="font-medium text-foreground tabular-nums">{d.solved}/{d.total} <span className="text-muted-foreground/60">({pct}%)</span></span>
+                                <div className="flex items-center justify-between text-xs mb-2">
+                                  <span className="font-semibold text-foreground">{d.label}</span>
+                                  <span className="tabular-nums text-muted-foreground">
+                                    <span className="font-medium text-foreground">{d.solved}</span>
+                                    <span className="text-muted-foreground/50 mx-0.5">/</span>
+                                    <span>{d.total}</span>
+                                    <span className="text-muted-foreground/50 ml-1.5">({pct}%)</span>
+                                  </span>
                                 </div>
-                                <div className="h-2 overflow-hidden rounded-full bg-secondary/60">
+                                <div className="h-2.5 overflow-hidden rounded-full bg-secondary/60">
                                   <div className={`h-full rounded-full ${d.color} transition-all duration-500`} style={{ width: `${pct}%` }} />
                                 </div>
                               </div>
                             );
-                          })
-                        ) : (
-                          <p className="text-xs text-muted-foreground text-center py-4">No problem data yet</p>
-                        )}
+                          }) : (
+                            <p className="text-xs text-muted-foreground text-center py-4">No problem data yet</p>
+                          );
+                        })()}
                       </div>
                       {profileStats.companySolved.length > 0 && (
                         <div className="mt-6">

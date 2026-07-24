@@ -9,6 +9,9 @@ export interface GoalSettings {
   revisionTarget: number;
   weeklyTarget: number;
   monthlyTarget: number;
+  targetDate: string;
+  targetTotal: number;
+  reminderEnabled: boolean;
 }
 
 const STORAGE_KEY = "goal-settings";
@@ -20,6 +23,9 @@ const DEFAULT_SETTINGS: GoalSettings = {
   revisionTarget: 1,
   weeklyTarget: 10,
   monthlyTarget: 30,
+  targetDate: new Date(Date.now() + 90 * 86400000).toISOString().slice(0, 10),
+  targetTotal: 150,
+  reminderEnabled: false,
 };
 
 function loadSettings(): GoalSettings {
@@ -34,6 +40,7 @@ function loadSettings(): GoalSettings {
 }
 
 function saveSettings(s: GoalSettings) {
+  if (typeof window === "undefined") return;
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(s));
   } catch {}

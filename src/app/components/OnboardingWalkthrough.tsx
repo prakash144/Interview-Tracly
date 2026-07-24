@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { Target, Kanban, BarChart3, Sparkles, ChevronRight, SkipForward } from "lucide-react";
-import { Dialog, DialogContent } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 
 const ONBOARDING_KEY = "interview-tracly-onboarding-done";
@@ -81,7 +81,7 @@ export const OnboardingWalkthrough = () => {
             {s.icon}
           </div>
           <div className="text-center mb-4">
-            <h2 className="text-lg font-semibold text-foreground">{s.title}</h2>
+            <DialogTitle className="text-lg font-semibold text-foreground">{s.title}</DialogTitle>
             <p className="text-sm text-muted-foreground mt-1">{s.description}</p>
           </div>
           <div className="rounded-lg border border-border/60 bg-secondary/30 p-3">

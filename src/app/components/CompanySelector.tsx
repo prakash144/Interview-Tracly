@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useState } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
 import { ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -26,21 +26,15 @@ interface CompanySelectorProps {
 }
 
 const CompanySelector: React.FC<CompanySelectorProps> = ({
-                                                             selectedCompanies,
-                                                             onCompanyChange,
-                                                         }) => {
+                                                              selectedCompanies,
+                                                              onCompanyChange,
+                                                          }) => {
     const allCompanies = Object.values(companies).flat();
-    const defaultCompany = selectedCompanies || allCompanies[0];
 
-    const [selectedCompany, setSelectedCompany] = useState<string>(defaultCompany);
+    const [selectedCompany, setSelectedCompany] = useState<string>(selectedCompanies || allCompanies[0]);
     const [query, setQuery] = useState<string>("");
     const [userTyping, setUserTyping] = useState(false);
     const [open, setOpen] = useState(false);
-
-    useEffect(() => {
-        setSelectedCompany(defaultCompany);
-        onCompanyChange(defaultCompany);
-    }, [defaultCompany, onCompanyChange]);
 
     const handleCompanySelect = (company: string) => {
         setSelectedCompany(company);
