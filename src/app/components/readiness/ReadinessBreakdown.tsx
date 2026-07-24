@@ -21,6 +21,7 @@ const FACTORS: FactorDef[] = [
   { key: "difficultyBalance", label: "Difficulty Balance", description: "Even distribution across Easy, Medium, and Hard problems", weight: "15%" },
   { key: "revisionCompletion", label: "Revision Completion", description: "Percentage of revision tasks marked as reviewed", weight: "15%" },
   { key: "consistency", label: "Consistency", description: "Active practice days relative to target (30 days)", weight: "15%" },
+  { key: "currentStreakScore", label: "Streak", description: "Current practice streak relative to 30-day target", weight: "10%" },
 ];
 
 const FactorProgress = ({ value, label, description, weight }: { value: number; label: string; description: string; weight: string }) => {

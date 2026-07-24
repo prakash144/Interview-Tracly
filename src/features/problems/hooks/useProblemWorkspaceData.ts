@@ -7,15 +7,22 @@ import { fetchUnifiedProblems } from "@/app/services/fetchUnifiedProblems";
 import { useAuth } from "@/hooks/useAuth";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 import { useProblemProgress } from "@/hooks/useProblemProgress";
+import { useStorageSync } from "@/hooks/useStorageSync";
 import { loadCodingPrefs } from "@/lib/codingPreferences";
 import { useProblemFilters } from "./useProblemFilters";
 import type { Problem } from "@/lib/progressTypes";
 
-const initialPrefs = typeof window !== "undefined" ? loadCodingPrefs() : null;
-
 export const useProblemWorkspaceData = () => {
-  const [selectedCompany, setSelectedCompany] = useState(initialPrefs?.company ?? "Google");
-  const [selectedList, setSelectedList] = useState(initialPrefs?.sheet ?? "5. All.csv");
+  const [selectedCompany, setSelectedCompany] = useState(() => (loadCodingPrefs()?.company ?? "Google"));
+  const [selectedList, setSelectedList] = useState(() => (loadCodingPrefs()?.sheet ?? "5. All.csv"));
+
+  const { syncedPrefs } = useStorageSync();
+  useEffect(() => {
+    if (syncedPrefs) {
+      setSelectedCompany(syncedPrefs.company);
+      setSelectedList(syncedPrefs.sheet);
+    }
+  }, [syncedPrefs]);
   const [lastUpdated, setLastUpdated] = useState<string | null>(null);
   const [unifiedProblems, setUnifiedProblems] = useState<Problem[]>([]);
   const [unifiedLoading, setUnifiedLoading] = useState(true);

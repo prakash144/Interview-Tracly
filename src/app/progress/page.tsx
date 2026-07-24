@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState, useCallback } from "react";
-import { ArrowDown, ArrowUp, ArrowUpDown, BookOpen, CheckCircle2, Circle, Clock, RotateCcw, Search, X } from "lucide-react";
+import { ArrowDown, ArrowUp, ArrowUpDown, BookOpen, CheckCircle2, Circle, Clock, RotateCcw, Search, X, AlertTriangle } from "lucide-react";
 import Footer from "@/app/components/Footer";
 import AppShell from "@/components/layout/AppShell";
 import PageHeader from "@/components/layout/PageHeader";
@@ -16,6 +16,8 @@ import { useProblemWorkspaceData } from "@/features/problems/hooks/useProblemWor
 import { useDashboardStats } from "@/hooks/useDashboardStats";
 import { useResources } from "@/hooks/useResources";
 import { useResourceProgress } from "@/hooks/useResourceProgress";
+import { useGoals } from "@/hooks/useGoals";
+import { computeBurndown, computePace } from "@/lib/burndown";
 import type { Problem, UserProblemProgress } from "@/lib/progressTypes";
 
 type ProgressEntry = {
@@ -46,6 +48,16 @@ const ProgressPage = () => {
   const [sortOrder, setSortOrder] = useState<SortOrder>("desc");
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
+
+  const { settings: goalSettings } = useGoals();
+  const burndown = useMemo(
+    () => computeBurndown(progress.progressMap, goalSettings.targetTotal, goalSettings.targetDate),
+    [progress.progressMap, goalSettings.targetTotal, goalSettings.targetDate]
+  );
+  const pace = useMemo(
+    () => computePace(progress.progressMap, goalSettings.targetDate, goalSettings.targetTotal),
+    [progress.progressMap, goalSettings.targetDate, goalSettings.targetTotal]
+  );
 
   const toggleSort = useCallback((field: SortField) => {
     setSortField((prev) => {
@@ -526,6 +538,52 @@ const ProgressPage = () => {
                   <div><div className="text-lg font-bold text-foreground">{avgDaily}</div><div className="text-xs text-muted-foreground">Avg Daily</div></div>
                   <div><div className="text-lg font-bold text-foreground">{avgWeekly}</div><div className="text-xs text-muted-foreground">Avg / Week</div></div>
                 </div>
+              </div>
+
+              <div className={`rounded-lg border border-border/70 bg-card/90 p-5 shadow-sm transition-shadow duration-200 hover:shadow-md ${!pace.onTrack ? "border-warning/30" : ""}`}>
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Burn-down</h3>
+                  {!pace.onTrack && <AlertTriangle className="size-3.5 text-warning" />}
+                </div>
+                {burndown.points.length > 0 ? (
+                  <div className="space-y-2">
+                    <svg viewBox="0 0 300 120" className="w-full h-auto">
+                      <line x1="20" y1="100" x2="280" y2="100" stroke="currentColor" strokeOpacity="0.15" strokeWidth="1" />
+                      <line x1="20" y1="30" x2="20" y2="100" stroke="currentColor" strokeOpacity="0.15" strokeWidth="1" />
+                      {/* ideal line */}
+                      {burndown.points.length > 1 && (
+                        <line x1="20" y1="30" x2="280" y2="100" stroke="currentColor" strokeOpacity="0.25" strokeWidth="1.5" strokeDasharray="4 2" />
+                      )}
+                      {/* actual line */}
+                      {burndown.points.map((p, i) => {
+                        const x = 20 + (i / Math.max(burndown.points.length - 1, 1)) * 260;
+                        const yMax = burndown.points[0]?.problemsRemaining || 150;
+                        const h = yMax > 0 ? (p.problemsRemaining / yMax) * 70 : 0;
+                        const y = 100 - h;
+                        const next = burndown.points[i + 1];
+                        return (
+                          <g key={p.day}>
+                            {next && (
+                              <line x1={x} y1={y} x2={20 + ((i + 1) / Math.max(burndown.points.length - 1, 1)) * 260}
+                                y2={100 - ((next.problemsRemaining / yMax) * 70)} stroke="hsl(var(--success))" strokeWidth="2" />
+                            )}
+                            <circle cx={x} cy={y} r="3" fill="hsl(var(--success))" className="drop-shadow-sm" />
+                          </g>
+                        );
+                      })}
+                    </svg>
+                    <div className="grid grid-cols-2 gap-2 text-xs">
+                      <div><span className="text-muted-foreground">Remaining</span><br /><span className="text-lg font-bold tabular-nums">{burndown.remaining}</span></div>
+                      <div><span className="text-muted-foreground">Pace</span><br />
+                        <span className={`text-sm font-medium ${pace.onTrack ? "text-success" : "text-warning"}`}>
+                          {pace.onTrack ? "On track" : `${pace.neededPerDay}/day needed`}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <p className="text-sm text-muted-foreground text-center py-4">Not enough data yet</p>
+                )}
               </div>
 
               {resourceStats.total > 0 && (

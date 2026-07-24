@@ -2,14 +2,14 @@
 
 import { useState, useMemo, useCallback, useEffect } from "react";
 import type { ProgressMap, Problem } from "@/lib/progressTypes";
-
-const REVISION_INTERVALS = [1, 3, 7, 14, 30, 60, 90];
+import { type Sm2State, createSm2State, scheduleFirstReview, computeNextReview } from "@/lib/spacedRepetition";
 
 const STORAGE_KEY = "revision-progress";
 
 interface ReviewEntry {
   status: "reviewed" | "skipped";
   date: string;
+  sm2?: Sm2State;
 }
 
 type RevisionProgress = Record<string, ReviewEntry>;
@@ -25,6 +25,7 @@ function loadProgress(): RevisionProgress {
 }
 
 function saveProgress(p: RevisionProgress) {
+  if (typeof window === "undefined") return;
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(p));
   } catch {}
@@ -52,22 +53,8 @@ export interface RevisionStats {
   total: number;
 }
 
-function daysBetween(a: Date, b: Date): number {
-  return Math.round((b.getTime() - a.getTime()) / 86400000);
-}
-
 function formatDate(date: Date): string {
   return date.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
-}
-
-function getBucket(days: number): "overdue" | "today" | "this-week" | null {
-  for (const interval of REVISION_INTERVALS) {
-    if (Math.abs(days - interval) <= 1) return "today";
-  }
-  const nextInterval = REVISION_INTERVALS.find((i) => i > days);
-  if (nextInterval && nextInterval - days <= 7) return "this-week";
-  if (days > REVISION_INTERVALS[REVISION_INTERVALS.length - 1] + 1) return "overdue";
-  return null;
 }
 
 export function useRevisionTracker(progressMap: ProgressMap, questions: Problem[]) {
@@ -84,7 +71,7 @@ export function useRevisionTracker(progressMap: ProgressMap, questions: Problem[
   }, [questions]);
 
   const buckets = useMemo((): RevisionBuckets => {
-    const now = new Date();
+    const now = Date.now();
     const overdue: RevisionItem[] = [];
     const reviewToday: RevisionItem[] = [];
     const reviewThisWeek: RevisionItem[] = [];
@@ -92,9 +79,11 @@ export function useRevisionTracker(progressMap: ProgressMap, questions: Problem[
     for (const [id, p] of Object.entries(progressMap)) {
       if (!p.solved || !p.solvedAt) continue;
       const solvedDate = new Date(p.solvedAt.seconds * 1000);
-      const days = daysBetween(solvedDate, now);
-      if (days < 1) continue;
+      const daysSinceSolved = Math.round((now - solvedDate.getTime()) / 86400000);
+      if (daysSinceSolved < 1) continue;
 
+      const entry = progress[id];
+      const nextReview = entry?.sm2?.nextReviewAt ?? null;
       const q = questionMap.get(id);
       const item: RevisionItem = {
         problemId: id,
@@ -102,13 +91,20 @@ export function useRevisionTracker(progressMap: ProgressMap, questions: Problem[
         company: q?.company || "",
         difficulty: q?.difficulty || "",
         lastSolved: formatDate(solvedDate),
-        daysSinceSolved: days,
+        daysSinceSolved,
       };
 
-      const bucket = getBucket(days);
-      if (bucket === "today") reviewToday.push(item);
-      else if (bucket === "this-week") reviewThisWeek.push(item);
-      else if (bucket === "overdue") overdue.push(item);
+      if (nextReview && nextReview <= now) {
+        overdue.push(item);
+      } else if (nextReview && nextReview <= now + 86400000) {
+        reviewToday.push(item);
+      } else if (nextReview && nextReview <= now + 7 * 86400000) {
+        reviewThisWeek.push(item);
+      } else if (!entry?.sm2 && daysSinceSolved >= 1) {
+        if (daysSinceSolved <= 1) reviewToday.push(item);
+        else if (daysSinceSolved <= 7) reviewThisWeek.push(item);
+        else overdue.push(item);
+      }
     }
 
     return {
@@ -116,7 +112,7 @@ export function useRevisionTracker(progressMap: ProgressMap, questions: Problem[
       reviewToday: reviewToday.sort((a, b) => a.daysSinceSolved - b.daysSinceSolved),
       reviewThisWeek: reviewThisWeek.sort((a, b) => a.daysSinceSolved - b.daysSinceSolved),
     };
-    }, [progressMap, questionMap]);
+  }, [progressMap, questionMap, progress]);
 
   const stats = useMemo((): RevisionStats => {
     const completed = Object.values(progress).filter((e) => e.status === "reviewed").length;
@@ -130,11 +126,24 @@ export function useRevisionTracker(progressMap: ProgressMap, questions: Problem[
     };
   }, [buckets, progress]);
 
-  const markReviewed = useCallback((problemId: string) => {
+  const scheduleReview = useCallback((problemId: string) => {
+    const sm2 = scheduleFirstReview();
     setProgress((prev) => ({
       ...prev,
-      [problemId]: { status: "reviewed", date: new Date().toISOString().slice(0, 10) },
+      [problemId]: { status: "reviewed", date: new Date().toISOString().slice(0, 10), sm2 },
     }));
+  }, []);
+
+  const markReviewed = useCallback((problemId: string, quality = 3) => {
+    setProgress((prev) => {
+      const existing = prev[problemId];
+      const currentSm2 = existing?.sm2 ?? createSm2State();
+      const nextSm2 = computeNextReview(currentSm2, quality);
+      return {
+        ...prev,
+        [problemId]: { status: "reviewed", date: new Date().toISOString().slice(0, 10), sm2: nextSm2 },
+      };
+    });
   }, []);
 
   const markSkipped = useCallback((problemId: string) => {
@@ -152,5 +161,5 @@ export function useRevisionTracker(progressMap: ProgressMap, questions: Problem[
     });
   }, []);
 
-  return { buckets, stats, progress, markReviewed, markSkipped, resetProgress };
+  return { buckets, stats, progress, scheduleReview, markReviewed, markSkipped, resetProgress };
 }

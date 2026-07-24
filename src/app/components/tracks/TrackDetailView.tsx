@@ -9,6 +9,7 @@ import Footer from "@/app/components/Footer";
 import PageHeader from "@/components/layout/PageHeader";
 import ResourceCard from "./ResourceCard";
 import ResourceDialog from "./ResourceDialog";
+import ConfirmDialog from "@/components/ui/confirm-dialog";
 import { getTrack } from "@/lib/interviewTracks";
 import type { TrackId } from "@/lib/interviewTracks";
 import type { DifficultyLevel, ResourceLink, ResourceStatus, KnowledgeResource } from "@/lib/knowledgeBase";
@@ -51,6 +52,9 @@ const TrackDetailView = () => {
   // Dialog state
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingResource, setEditingResource] = useState<KnowledgeResource | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
+
+  const deletingResource = deleteTarget ? resources.find((r) => r.id === deleteTarget) ?? null : null;
 
   const handleAdd = () => {
     setEditingResource(null);
@@ -78,8 +82,15 @@ const TrackDetailView = () => {
     }
   };
 
-  const handleDelete = (resourceId: string) => {
-    deleteResource(resourceId);
+  const handleDeleteRequest = (resourceId: string) => {
+    setDeleteTarget(resourceId);
+  };
+
+  const handleDeleteConfirm = () => {
+    if (deleteTarget) {
+      deleteResource(deleteTarget);
+      setDeleteTarget(null);
+    }
   };
 
   const filteredResources = useMemo(() => {
@@ -172,7 +183,7 @@ const TrackDetailView = () => {
             className="h-9 text-xs bg-primary text-primary-foreground hover:bg-primary/80 cursor-pointer rounded-md"
           >
             <Plus className="size-3.5 mr-1" />
-            Add Question
+            Add Resource
           </Button>
         }
       />
@@ -343,7 +354,7 @@ const TrackDetailView = () => {
                   onToggleRevision={toggleRevision}
                   onSaveNotes={savePersonalNotes}
                   onEdit={handleEdit}
-                  onDelete={handleDelete}
+                  onDelete={handleDeleteRequest}
                 />
               ))}
             </div>
@@ -367,7 +378,7 @@ const TrackDetailView = () => {
               {!hasActiveFilters && (
                 <Button onClick={handleAdd} className="mt-4 h-8 text-xs bg-primary text-primary-foreground hover:bg-primary/80 cursor-pointer rounded-md">
                   <Plus className="size-3 mr-1" />
-                  Add Question
+                  Add Resource
                 </Button>
               )}
             </div>
@@ -394,6 +405,18 @@ const TrackDetailView = () => {
             : undefined
         }
         onSave={handleSave}
+      />
+
+      {/* Delete Confirmation */}
+      <ConfirmDialog
+        open={deleteTarget !== null}
+        onOpenChange={() => setDeleteTarget(null)}
+        onConfirm={handleDeleteConfirm}
+        title={deletingResource ? `Delete "${deletingResource.title}"` : "Delete Resource"}
+        message="Are you sure you want to permanently delete this resource? This action cannot be undone."
+        confirmLabel="Delete"
+        cancelLabel="Cancel"
+        variant="destructive"
       />
     </AppShell>
   );

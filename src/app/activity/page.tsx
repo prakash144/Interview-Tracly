@@ -19,6 +19,7 @@ import CalendarInsights from "@/app/components/CalendarInsights";
 import TodayMission from "@/app/components/TodayMission";
 import GoalSettingsDialog from "@/app/components/GoalSettingsDialog";
 import { useRevisionTracker } from "@/hooks/useRevisionTracker";
+import { useStudyReminder } from "@/hooks/useStudyReminder";
 import RevisionTracker from "@/app/components/RevisionTracker";
 import { useResources } from "@/hooks/useResources";
 import { useResourceProgress } from "@/hooks/useResourceProgress";
@@ -94,6 +95,21 @@ const ActivityPage = () => {
     }
     return count;
   }, [progress.progressMap]);
+
+  const dailySolved = useMemo(() => {
+    if (!progress.progressMap) return 0;
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    let count = 0;
+    for (const [, p] of Object.entries(progress.progressMap)) {
+      if (p.solved && p.solvedAt) {
+        if (new Date(p.solvedAt.seconds * 1000) >= today) count++;
+      }
+    }
+    return count;
+  }, [progress.progressMap]);
+
+  useStudyReminder(dailySolved, settings.dailyTarget, settings.reminderEnabled);
 
   const { sprints } = useSprints(auth.user?.uid);
   const activeSprint = sprints.find((s) => s.status === "active");
@@ -264,8 +280,8 @@ const ActivityPage = () => {
                   Knowledge Base Activity
                 </h3>
                 <div className="space-y-2">
-                  {resourceActivityEntries.map((entry, i) => (
-                    <div key={i} className="flex items-center gap-3 text-xs">
+                  {resourceActivityEntries.map((entry) => (
+                    <div key={`${entry.resourceTitle}-${entry.label}-${entry.date.getTime()}`} className="flex items-center gap-3 text-xs">
                       <entry.icon className={`size-3.5 shrink-0 ${entry.color}`} />
                       <span className="text-foreground truncate flex-1">{entry.resourceTitle}</span>
                       <span className="text-muted-foreground shrink-0">{entry.label}</span>

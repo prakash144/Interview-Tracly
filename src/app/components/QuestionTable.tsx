@@ -22,6 +22,7 @@ import {
 import { loadCodingPrefs, mapSortingToState } from "@/lib/codingPreferences";
 import { useProblemSorting } from "@/features/problems/hooks/useProblemSorting";
 import { usePagination } from "@/features/problems/hooks/usePagination";
+import { useKeyboardNav } from "@/hooks/useKeyboardNav";
 import ProblemPagination from "@/features/problems/components/ProblemPagination";
 import ProblemCardList from "@/features/problems/components/ProblemCardList";
 import AddToListDialog from "@/features/problems/components/AddToListDialog";
@@ -149,6 +150,20 @@ const QuestionTable = ({
         currentPage * pageSize
     );
 
+    const { focusedIndex, register: registerNav } = useKeyboardNav(paginatedProblems.length);
+    useEffect(() => {
+        registerNav({
+            onToggleSolved: (i) => {
+                const p = paginatedProblems[i];
+                if (p) onToggleSolved(p);
+            },
+            onToggleFavorite: (i) => {
+                const p = paginatedProblems[i];
+                if (p) onToggleBookmarked(p);
+            },
+        });
+    }, [paginatedProblems, onToggleSolved, onToggleBookmarked, registerNav]);
+
     const filteredAttempted = filteredQuestions.filter((q) => progressMap[q.problemId]?.attempted);
     const filteredBookmarked = filteredQuestions.filter((q) => progressMap[q.problemId]?.bookmarked);
 
@@ -197,6 +212,24 @@ const QuestionTable = ({
                 {progressLoading && (
                     <span className="rounded-md border border-info/20 bg-info/10 px-2.5 py-1 text-info">
                         Syncing...
+                    </span>
+                )}
+                {filteredQuestions.length > 1 && (
+                    <span className="ml-auto hidden sm:flex items-center gap-1">
+                        <button
+                            type="button"
+                            onClick={() => filteredQuestions.forEach((q) => onToggleSolved(q))}
+                            className="rounded-md border border-border/60 bg-secondary/70 px-2 py-1 text-[10px] text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
+                        >
+                            Mark all solved
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => filteredQuestions.forEach((q) => onToggleRevision(q))}
+                            className="rounded-md border border-border/60 bg-secondary/70 px-2 py-1 text-[10px] text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
+                        >
+                            Add all to revision
+                        </button>
                     </span>
                 )}
             </div>
@@ -257,6 +290,9 @@ const QuestionTable = ({
                             <span className="inline-flex items-center gap-1 rounded-md border border-border/70 bg-background/70 px-2.5 py-1 text-[11px] text-muted-foreground">
                                 <Eye className="size-3" />{pageSize} per page
                             </span>
+                            <span className="hidden sm:inline-flex items-center gap-1 rounded-md border border-border/70 bg-background/70 px-2.5 py-1 text-[10px] text-muted-foreground/60">
+                                j/k ↑↓ · s solve · f fav
+                            </span>
                         </div>
                     }
                 />
@@ -310,7 +346,7 @@ const QuestionTable = ({
                     const progress = progressMap[q.problemId];
 
                     return (
-                    <tr key={`${q.company}-${q.list}-${q.problemId}`} className="border-b border-border/60 bg-background/35 transition-colors duration-150 hover:bg-accent/45">
+                    <tr key={`${q.company}-${q.list}-${q.problemId}`} className={`border-b border-border/60 transition-colors duration-150 ${focusedIndex === index ? "bg-accent/60 ring-1 ring-inset ring-info/30" : "bg-background/35 hover:bg-accent/45"}`}>
                         {columnVisibility.index && <td className="px-3 py-2.5 tabular-nums text-muted-foreground">{range.from + index}</td>}
                         {columnVisibility.problem && (
                             <td className="sticky left-0 z-10 bg-background/95 px-3 py-2.5 font-medium backdrop-blur">

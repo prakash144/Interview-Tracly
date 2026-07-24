@@ -22,7 +22,7 @@ import CompanyProgress from "@/app/components/readiness/CompanyProgress";
 import MockInterviewSection from "@/app/components/readiness/MockInterviewSection";
 
 const ReadinessPage = () => {
-  const { auth, progress, questionsState, unifiedProblems, unifiedLoading } = useProblemWorkspaceData();
+  const { auth, progress, questionsState, unifiedProblems, unifiedLoading, unifiedError } = useProblemWorkspaceData();
   const allQuestions = unifiedProblems.length > 0 ? unifiedProblems : questionsState.questions;
   const companyReadiness = useCompanyReadiness(progress.progressMap);
   const revisionTracker = useRevisionTracker(progress.progressMap, allQuestions);
@@ -90,6 +90,10 @@ const ReadinessPage = () => {
 
         {progress.error && (
           <ErrorState message={progress.error} />
+        )}
+
+        {unifiedError && (
+          <ErrorState message={unifiedError} />
         )}
 
         {calendarData.error && (

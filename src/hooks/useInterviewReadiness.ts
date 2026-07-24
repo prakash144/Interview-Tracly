@@ -445,7 +445,7 @@ export function useInterviewReadiness(
     // --- Estimated Time ---
     const dailyTarget = settings.dailyTarget || 3;
     const estimatedDays = Math.ceil(remainingProblems / dailyTarget);
-    const estimatedTime = estimatedDays <= 1 ? "1 Day" : `${estimatedDays} Days`;
+    const estimatedTime = remainingProblems === 0 ? "Complete!" : estimatedDays <= 1 ? "1 Day" : `${estimatedDays} Days`;
 
     // --- Weak Patterns ---
     const weakPatterns: { pattern: string; completion: number }[] = patternCoverage
