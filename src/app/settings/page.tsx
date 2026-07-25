@@ -1,13 +1,14 @@
 "use client";
 
 import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
-import { ExternalLink, FileDown, Github, Monitor, Moon, Settings2, Sun, Trash2, User as UserIcon } from "lucide-react";
+import { ExternalLink, FileDown, Github, Monitor, Moon, RotateCcw, Settings2, Sun, Trash2, User as UserIcon } from "lucide-react";
 import { useSearchParams } from "next/navigation";
 import Footer from "@/app/components/Footer";
 import AppShell from "@/components/layout/AppShell";
 import PageHeader from "@/components/layout/PageHeader";
 import ErrorState from "@/components/states/ErrorState";
 import { SettingsSkeleton } from "@/components/states/PageSkeletons";
+import ConfirmDialog from "@/components/ui/confirm-dialog";
 import ProfileStatusChart from "@/app/components/ProfileStatusChart";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -201,6 +202,21 @@ const SettingsContent = () => {
     a.click();
     URL.revokeObjectURL(url);
   }, [exportFormat, exportScope, progress, questionsState.questions, prefs, weeklyGoal, dailyGoal]);
+
+  const [resetConfirm, setResetConfirm] = useState(false);
+
+  const handleReset = useCallback(() => {
+    if (typeof window === "undefined") return;
+    const keys = [
+      "coding-preferences", "goal-settings", "cheat-sheets", "behavioral-entries",
+      "study-sessions", "goal-history", "revision-progress", "mock-test-history",
+      "system-design-notes", "cheat-sheets-seeded", "behavioral-seeded",
+      "system-design-seeded", "achievements", "study-reminder-last-check",
+      "welcome-seen", "interviewtracly:prefs",
+    ];
+    keys.forEach((k) => { try { localStorage.removeItem(k); } catch {} });
+    window.location.reload();
+  }, []);
 
   const tabs: { id: TabId; label: string; icon: typeof UserIcon }[] = [
     { id: "profile", label: "Profile", icon: UserIcon },
@@ -656,7 +672,19 @@ const SettingsContent = () => {
                       <span className="text-sm font-semibold text-success">{totalSolved}</span>
                     </div>
 
-                    <div className="border-t border-border pt-4">
+                    <div className="border-t border-border pt-4 space-y-3">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setResetConfirm(true)}
+                        className="border-orange-500/30 bg-orange-500/10 text-orange-600 hover:bg-orange-500/20 cursor-pointer dark:text-orange-400"
+                      >
+                        <RotateCcw className="size-3.5 mr-1.5" />
+                        Reset All Data
+                      </Button>
+                      <p className="text-xs text-muted-foreground">Clears all local progress, notes, and settings. Auth stays intact.</p>
+
                       <Button
                         type="button"
                         variant="outline"
@@ -714,6 +742,17 @@ const SettingsContent = () => {
           </>
         )}
       </div>
+
+      <ConfirmDialog
+        open={resetConfirm}
+        onOpenChange={setResetConfirm}
+        onConfirm={handleReset}
+        title="Reset All Data?"
+        message="This permanently deletes all progress, study sessions, notes (cheat sheets, behavioral, system design), mock test history, revision data, goals, and preferences. Your Firebase auth stays signed in. This cannot be undone."
+        confirmLabel="Wipe Everything"
+        cancelLabel="Cancel"
+        variant="destructive"
+      />
     </AppShell>
   );
 };
