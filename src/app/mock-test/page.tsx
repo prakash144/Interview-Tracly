@@ -292,28 +292,27 @@ export default function MockTestPage() {
 
   const renderWizard = () => (
     <div ref={topRef} className="mx-auto max-w-4xl px-4 pb-10">
-      <div className="flex items-center gap-3 mb-6">
-        <button onClick={() => setWizardStep(null)} className="size-8 flex items-center justify-center rounded-lg border border-border hover:bg-accent transition-colors">
+      <div className="flex items-center gap-4 mb-6">
+        <button onClick={() => setWizardStep(null)} className="size-8 flex items-center justify-center rounded-lg border border-border hover:bg-accent transition-colors shrink-0">
           <ChevronLeft className="size-4 text-muted-foreground" />
         </button>
-        <div className="flex items-center gap-1 flex-1">
+        <div className="flex items-center justify-center flex-1 gap-0">
           {STEPS.map((s, i) => {
             const StepIcon = s.icon;
             const isActive = wizardStep === s.step;
             const isDone = wizardStep && wizardStep > s.step;
             return (
-              <div key={s.step} className="flex items-center gap-1 flex-1">
-                <button
-                  onClick={() => setWizardStep(s.step)}
-                  className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+              <div key={s.step} className="flex items-center gap-0">
+                <button onClick={() => setWizardStep(s.step)}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
                     isActive ? "bg-primary/10 text-primary border border-primary/20" : isDone ? "text-success" : "text-muted-foreground/50"
                   }`}
                 >
                   <StepIcon className="size-3.5" />
-                  <span className="hidden sm:inline">{s.label}</span>
+                  <span>{s.label}</span>
                   {isDone && <Check className="size-3" />}
                 </button>
-                {i < STEPS.length - 1 && <div className="h-px flex-1 bg-border" />}
+                {i < STEPS.length - 1 && <div className="w-6 sm:w-10 h-px bg-border mx-1 sm:mx-2" />}
               </div>
             );
           })}
@@ -347,10 +346,10 @@ export default function MockTestPage() {
             </div>
             <div className="space-y-1.5">
               <label className="text-xs font-medium text-muted-foreground">Duration</label>
-              <div className="flex gap-2">
+              <div className="grid grid-cols-4 gap-1.5">
                 {DURATIONS.map((d) => (
                   <button key={d} onClick={() => setConfig((p) => ({ ...p, durationMinutes: d }))}
-                    className={`flex-1 px-3 py-2 text-sm rounded-lg border transition-colors ${
+                    className={`px-1 py-2 text-xs rounded-lg border transition-colors text-center ${
                       config.durationMinutes === d ? "bg-primary text-primary-foreground border-primary" : "border-border hover:bg-accent text-muted-foreground"
                     }`}
                   >
