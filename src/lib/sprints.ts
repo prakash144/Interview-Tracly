@@ -1,4 +1,6 @@
-export type SprintStatus = "planned" | "active" | "completed";
+export type SprintStatus = "planned" | "active" | "completed" | "archived";
+
+export type SprintType = "learning" | "interview" | "certification" | "custom";
 
 export type TaskStatus = "todo" | "in-progress" | "done";
 
@@ -62,7 +64,17 @@ export interface Sprint {
   status: SprintStatus;
   startDate: string;
   endDate: string;
+  type: SprintType;
   capacityHours?: number;
+  company?: string;
+  role?: string;
+  interviewDate?: string;
+  targetLevel?: string;
+  stages?: string[];
+  template?: string;
+  priority?: number;
+  pausedSprintId?: string;
+  archivedAt?: number;
   createdAt: number;
   updatedAt: number;
   retro?: SprintRetro;
@@ -147,6 +159,23 @@ export const SPRINT_TEMPLATES: SprintTemplate[] = [
       { title: "Review all solved problems & document patterns", estimatedHours: 1.5, priority: "medium" },
     ],
   },
+];
+
+export interface CompanyTemplate {
+  id: string;
+  company: string;
+  topics: string[];
+  stages: string[];
+  recommendedProblems: number;
+}
+
+export const COMPANY_TEMPLATES: CompanyTemplate[] = [
+  { id: "google", company: "Google", topics: ["Graphs", "DP", "System Design", "Behavioral"], stages: ["OA", "Phone Screen", "Onsite"], recommendedProblems: 50 },
+  { id: "microsoft", company: "Microsoft", topics: ["Trees", "DP", "LLD", "Concurrency", "Behavioral"], stages: ["OA", "Phone Screen", "Onsite"], recommendedProblems: 45 },
+  { id: "amazon", company: "Amazon", topics: ["Leadership Principles", "DSA", "System Design"], stages: ["OA", "Phone Screen", "Onsite"], recommendedProblems: 50 },
+  { id: "meta", company: "Meta", topics: ["Graphs", "BFS", "DFS", "Behavioral"], stages: ["OA", "Phone Screen", "Onsite"], recommendedProblems: 40 },
+  { id: "apple", company: "Apple", topics: ["LLD", "DSA", "System Design", "Behavioral"], stages: ["Phone Screen", "Onsite"], recommendedProblems: 35 },
+  { id: "netflix", company: "Netflix", topics: ["System Design", "DSA", "Behavioral"], stages: ["Phone Screen", "Onsite"], recommendedProblems: 30 },
 ];
 
 export function createDefaultTaskV2(base: {

@@ -1,6 +1,6 @@
 import { getApps, initializeApp, type FirebaseApp } from "firebase/app";
 import { getAuth, GoogleAuthProvider, type Auth } from "firebase/auth";
-import { getFirestore, enableMultiTabIndexedDbPersistence, type Firestore } from "firebase/firestore";
+import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager, type Firestore } from "firebase/firestore";
 
 const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
@@ -29,18 +29,14 @@ const getFirebaseApp = (): FirebaseApp | null => {
 const app = getFirebaseApp();
 
 export const auth: Auth | null = app ? getAuth(app) : null;
-export const db: Firestore | null = app ? getFirestore(app) : null;
+export const db: Firestore | null = app
+  ? initializeFirestore(app, {
+      localCache: persistentLocalCache({
+        tabManager: persistentMultipleTabManager(),
+      }),
+    })
+  : null;
 export const googleProvider = new GoogleAuthProvider();
-
-if (db) {
-  enableMultiTabIndexedDbPersistence(db).catch((err) => {
-    if (err.code === 'failed-precondition') {
-      console.warn('[Firebase] Multiple tabs open, offline persistence enabled in first tab only.');
-    } else if (err.code === 'unimplemented') {
-      console.warn('[Firebase] Browser does not support offline persistence.');
-    }
-  });
-}
 
 export const requireAuth = () => {
   if (!auth) {

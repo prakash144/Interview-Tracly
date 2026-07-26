@@ -25,8 +25,8 @@ graph TB
         SPRINTS[useSprints<br/>+ useSprintTasks]
         PROGRESS[useProblemProgress]
         DASH[useDashboardStats]
-        COLL[useCollections]
-        READY[useInterviewReadiness]
+        COLL[useCustomLists]
+        READY[useInterviewReadiness<br/>+ useCompanyReadiness]
         CAL[useCalendarData]
     end
 
@@ -39,6 +39,7 @@ graph TB
         E[customListService]
         F[authService]
         G[userService]
+        H[activityService]
     end
 
     %% ── Data Sources ──
@@ -67,9 +68,11 @@ graph TB
 
 **Key architectural principles:**
 - **Static export** (`output: 'export'`): Zero server runtime. All data fetched client-side after JS hydration.
-- **Optimistic updates**: Every mutation updates local state immediately, syncs to Firestore in background, rolls back on failure.
+- **Real-time listeners**: All 5 data hooks use `onSnapshot` for cross-tab live updates.
+- **Optimistic updates**: Every mutation updates local state immediately, syncs to Firestore in background, rolls back on failure via ref mirror + pre-mutation snapshot.
 - **Feature-sliced**: Hooks encapsulate all data logic; pages are thin composition layers.
 - **Parallel systems**: "Problems" (CSV-sourced LeetCode) and "Knowledge Resources" (Firestore-stored prep materials) coexist with separate data models but unified UI patterns.
+- **Offline persistence**: `enableMultiTabIndexedDbPersistence` enabled at Firebase init.
 
 ---
 
@@ -84,7 +87,7 @@ graph TB
 | `users/{uid}/resources/{resourceId}` | Auto `res_...` | `title`, `company`, `track`, `difficulty`, `tags`, `resourceLinks[]`, `askedAt`, `notes` | `resourceService.ts` |
 | `users/{uid}/resourceProgress/{resourceId}` | Auto | `status`, `inRevisionList`, `personalNotes`, timestamps | `resourceService.ts` |
 | `users/{uid}/tracks/{trackId}` | User/auto | `name`, `icon`, `color`, `description`, `shortDescription` | `trackService.ts` |
-| `users/{uid}/sprints/{sprintId}` | Auto `sprint_...` | `name`, `goal`, `status`, `startDate`, `endDate`, `capacityHours`, `retro?`, timestamps | `sprintService.ts` |
+| `users/{uid}/sprints/{sprintId}` | Auto `sprint_...` | `name`, `goal`, `status`, `type` (learning/interview/certification/custom), `company`, `role`, `interviewDate`, `targetLevel`, `stages`, `template`, `pausedSprintId`, `capacityHours`, `retro?`, timestamps | `sprintService.ts` |
 | `users/{uid}/sprints/{sprintId}/tasks/{taskId}` | Auto `task_...` | `SprintTaskV2`: `type`, `itemId`, `title`, `description`, `track`, `category`, `priority`, `difficulty`, `estimatedHours`, `actualHours`, `status` (backlog/todo/in-progress/review/done), `dueDate`, `company`, `tags[]`, `collectionIds[]`, `notes`, `linkedProblemIds[]`, `linkedResourceIds[]`, `order`, timestamps | `sprintService.ts` |
 | `users/{uid}/activity/{eventType}` | Auto | `type` (sprint_start/sprint_complete/task_done), `sprintId`, `taskId?`, `title`, `timestamp` | `activityService.ts` |
 | `users/{uid}/customLists/{listId}` | Firestore auto | `name`, `description`, `problemIds[]` | `customListService.ts` |
@@ -101,11 +104,14 @@ Hook mutation (e.g. addResource)
     ├─ 3. Fire-and-forget: service.addResource()
     └─ 4. On error → rollback: restore refMirror to pre-mutation state
 
+Snapshot (real-time):
+  onSnapshot callback → merge into refMirror + setState
+  Cleanup: unsubscribe on unmount
+
 Special cases:
   - useCustomLists: ref mirror + rollback (same as above, migrated from reload())
   - useSprintTasks: refMirror is a Map<sprintId, SprintTaskV2[]> with deep clone on snapshot
 ```
-
 
 ### Problem Data (NOT in Firestore)
 
@@ -121,18 +127,20 @@ Special cases:
 ### Routing (static export — all routes known at build time)
 
 | Route | Page | Purpose |
-|---|---|---|---|
+|---|---|---|
 | `/` | Dashboard | Profile, stats, widgets, active sprint, quick task status toggle |
-| `/problems` | Problems | Filterable Kanban-style problem workspace |
-| `/sprints` | Sprints | Sprint list + 5-column Kanban detail + retro + analytics |
-| `/tracks` | Tracks | Track grid + inline detail view (Manage dialog) + bookmarked resources |
+| `/problems` | Problems | Filterable workspace with custom list management |
+| `/sprints` | Sprints | Sprint list + 5-column Kanban + retro + analytics + timeline |
+| `/tracks` | Tracks | Track grid + inline detail view + bookmarked resources |
 | `/tracks/[trackId]` | TrackDetail (SSG) | Pre-rendered detail for 7 default tracks |
 | `/progress` | Progress | Charts, knowledge base stats, heatmap |
-| `/activity` | Activity | Calendar, sprint timeline events, revision tracker |
-| `/readiness` | Readiness | Company readiness score + action plan |
+| `/activity` | Activity | Calendar, sprint timeline, daily mission, revision tracker |
+| `/readiness` | Readiness | Company readiness score + hero card + action plan + weak areas |
 | `/collections` | Collections | Sidebar + filtered problem grid |
 | `/settings` | Settings | Theme, accent, account |
-| `/favorites` | Favorites | Bookmarked knowledge resources (rewritten) |
+| `/favorites` | Favorites | Bookmarked knowledge resources |
+| `/mock-test` | MockTest | Multi-section timed mock interview with 7 interview types, configurable company/role/level, section builder, and AI-ready review |
+| `/archive` | Archive | Centralized trash/archive with category grouping (sprints, tracks, resources) and type filter, restore and permanent delete |
 | `/my-lists`, `/analytics` | Redirect | → `/collections` or `/progress` |
 
 ### Component Nesting
@@ -141,11 +149,11 @@ Special cases:
 AppShell
 ├── TopNav
 │   ├── Logo
-│   ├── Desktop NavLinks (8 items)
+│   ├── Desktop NavLinks (9 items — incl. MockTest)
 │   ├── SearchTrigger → GlobalSearch (Cmd+K Dialog, problems + resources)
 │   ├── ThemeToggle
 │   ├── UserMenu
-│   └── Mobile: Sheet drawer (same 8 items)
+│   └── Mobile: Sheet drawer (same 9 items)
 ├── <main>  ← animate-in fade-in
 │   ├── PageHeader
 │   └── [Page Content]
@@ -158,10 +166,29 @@ Shared Sprint Components:
   SortableTaskCard — rich card: priority, track badge, difficulty, est hours, tags, company, edit/delete
   TaskDetailDialog — full editor: all SprintTaskV2 fields, linked problems/resources, tags, notes
   FilterBar — search + dropdowns for track/priority/status/company/difficulty + clear button
+  SprintDialog — create/edit: type selector, company template dropdown, interview fields
+  SprintCard — sprint list card with suspended badge, countdown, focus indicator
+  SprintTimeline — visual sprint transition history
+  InterviewCompleteDialog — outcome selection + resume/archive choices
+  ConfirmDialog — replaces window.confirm for destructive actions (delete sprint)
 
 Shared Resource Components:
   FavoriteResourcesWidget — bookmarked resources displayed on dashboard
   ResourceQuickLink — compact resource chip for inline linking
+
+Readiness Page Components:
+  CompanySelector — company dropdown filter (Overall + 9 companies)
+  HeroCard — score ring + level + remaining problems + estimated time
+  ReadinessBreakdown — 5-factor progress bars
+  ActionPlan — structured action items with checkboxes
+  WeakAreas — grouped weak topics/patterns/difficulty
+  CompanyProgress — comparison table with logos
+  MockInterviewSection — compact readiness summary
+
+Mock Test Components:
+  MockTestConfig — interview config: company, role, level, duration, section builder (add/remove/reorder sections by type)
+  MockTestActive — active phase: section tabs with progress, per-question actions (solved/partial/skip/hint), timer
+  MockTestSummary — full review: score ring, stats grid, difficulty breakdown, section cards, strengths/weaknesses, recommendations, suggested topics, next practice plan, problem breakdown, history
 ```
 
 ### Auth Flow
@@ -174,7 +201,7 @@ RootLayout (layout.tsx)
         → if not: AuthUnavailable (full-screen)
         → if yes: render children
           → Pages check auth.user individually
-            → some show content for guests (Dashboard, Problems, Tracks, Progress, Activity, Readiness)
+            → most show content for guests (Dashboard, Problems, Tracks, Progress, Activity, Readiness, MockTest)
             → some gate behind sign-in (Sprints, Collections)
 ```
 
@@ -186,94 +213,138 @@ RootLayout (layout.tsx)
 
 | # | Gap | Location | Impact |
 |---|---|---|---|
-| G1 | **No Firestore index configuration** — `orderBy("createdAt", "desc")` in sprintService, activityService, trackService without `firestore.indexes.json` | All service files | Queries fail at runtime when >10 docs match; Firestore requires composite indexes |
+| G1 | ~~No Firestore index configuration~~ | All service files | ✅ Resolved — `firestore.indexes.json` with 5 compound indexes |
 | G2 | ~~Delete sprint doesn't cascade to tasks~~ | `sprintService.ts` | ✅ Already implemented — `deleteSprint()` batch-deletes tasks subcollection |
-| G3 | **No real-time Firestore listeners** — all reads use `getDocs()` (one-shot) | Every service file | Data staleness within session; user must refresh to see changes |
-| G4 | **Offline persistence not enabled** — no `enableMultiTabIndexedDbPersistence()` | Firebase init | App breaks on network loss |
+| G3 | ~~No real-time Firestore listeners~~ | Every service file | ✅ Resolved — switched to `onSnapshot` in all 6 data hooks |
+| G4 | ~~Offline persistence not enabled~~ | Firebase init | ✅ Resolved — `enableMultiTabIndexedDbPersistence` added |
 
 ### 🟡 Moderate Issues
 
 | # | Gap | Location | Impact |
 |---|---|---|---|
 | G5 | **No migration path for old sprint tasks** — old `SprintTask` docs lack V2 fields; `migrateTask()` provides defaults but doesn't write back | `sprintService.ts` | Old tasks missing V2 fields remain in Firestore forever |
-| G6 | **`orderBy("addedAt")` in task queries** — tasks ordered by `addedAt` instead of `order` field | `sprintService.ts` | `reorderTasks()` writes `order` but reads still sort by `addedAt` |
-| G7 | **CollectionView prop drilling** — ~30 props passed through | `collections/page.tsx:131-148` | Hard to maintain; no composition pattern |
+| G6 | ~~`orderBy("addedAt")` in task queries~~ | `sprintService.ts` | ✅ Resolved — switched to `orderBy("order")` |
+| G7 | **CollectionView prop drilling** — ~30 props passed through | `collections/page.tsx` | Hard to maintain; no composition pattern |
 | G8 | **Sample resources not database-backed** — merged client-side, not in Firestore | `useResources.ts` | Deleting samples does nothing; ID conflicts possible |
-| G9 | **No toast/snackbar system** — actions have no visual feedback | All hooks | Users don't know if save succeeded or failed |
+| G9 | ~~No toast/snackbar system~~ | All hooks | ✅ Resolved — Sonner with unique IDs for dedup across all 44+ toast calls |
+| G10 | **Toast IDs still inconsistent** — some use `"success"`, some `"toast-success"`, no shared constant | `useSprints.ts` and others | Minor inconsistency; doesn't affect functionality but breaks central dedup management |
 
 ### 🟢 Minor / Cosmetic
 
 | # | Gap | Location | Impact |
 |---|---|---|---|
-| G10 | **No PWA service worker** — `manifest.json` exists but no offline support | Project root | App doesn't work offline despite being static-exportable |
-| G11 | **No anonymous auth** — only Google Sign-In | `authService.ts` | Users without Google accounts cannot create persistent data |
-| G12 | **GlobalSearch fetches all problems on mount** — 5 remote CSVs on every dialog open | `GlobalSearch.tsx` | Unnecessary network requests after initial cache |
-| G13 | **No loading/error states for bookmarks** — `FavoriteResourcesWidget` returns `null` if empty | `FavoriteResourcesWidget.tsx` | No visual feedback while loading |
+| G11 | **No PWA service worker** — `manifest.json` exists but no offline support | Project root | App doesn't work offline despite being static-exportable |
+| G12 | **No anonymous auth** — only Google Sign-In | `authService.ts` | Users without Google accounts cannot create persistent data |
+| G13 | **GlobalSearch fetches all problems on mount** — 5 remote CSVs on every dialog open | `GlobalSearch.tsx` | Unnecessary network requests after initial cache |
+| G14 | **No loading/error states for bookmarks** — `FavoriteResourcesWidget` returns `null` if empty | `FavoriteResourcesWidget.tsx` | No visual feedback while loading |
 
-### ✅ Resolved Gaps
+### ✅ Resolved Gaps (recent production fixes)
 
 | # | Gap | Resolution |
 |---|---|---|
-| ~~G2~~ | Track deletion orphans resources | Cascade delete with confirmation dialog added (Phase I.3) |
-| ~~G3~~ | SprintTask missing `order` field | Added `order?: number` to SprintTask interface (Phase I.1) |
-| ~~G4~~ | useCustomLists skips optimistic updates | Rewritten with ref mirror + rollback pattern (Phase I.2) |
-| ~~G10~~ | Problems not in Global Search | Problems now appear grouped under "Problems" section (Phase I.4) |
+| ~~G2~~ | Track deletion orphans resources | Cascade delete with confirmation dialog |
+| ~~G3~~ | SprintTask missing `order` field | Added `order?: number` to SprintTask interface |
+| ~~G4~~ | useCustomLists skips optimistic updates | Rewritten with ref mirror + rollback pattern |
+| ~~G10~~ | Problems not in Global Search | Problems now appear grouped under "Problems" section |
+| ~~G9~~ | No toast/snackbar system | Sonner integrated with 44+ toast calls, dedup IDs |
+| ~~G6~~ | orderBy("addedAt") instead of order | Switched to `orderBy("order")` in task queries |
+| ~~G1/G3/G4~~ | Firestore indexes / real-time / offline | All three resolved |
+| ~~—~~ | `window.confirm` on sprint delete | Replaced with `ConfirmDialog` |
+| ~~—~~ | `alert()` in mock-test | Replaced with `toast.error` |
+| ~~—~~ | Missing `aria-label` on icon-only delete button | Added `aria-label="Delete sprint"` |
+| ~~—~~ | Emoji in error boundary | Replaced with SVG AlertTriangle icon |
+| ~~—~~ | No `prefers-reduced-motion` | Added CSS rule for `.stagger-group` |
+| ~~—~~ | `updateTask` catch used wrong ref | Fixed `sprintsRef` → `tasksRef` |
 
 ---
 
 ## 4. Feature Roadmap
 
-### ✅ Recently Completed (Phase I + Phase II)
+### ✅ Recently Completed (Phase I — Phase V)
 
-| # | Feature | When |
+| # | Feature | Phase |
 |---|---|---|
-| F1 | **SprintTask order field** (I.1) | ✅ Done |
-| F2 | **Optimistic updates for customLists** (I.2) | ✅ Done |
-| F3 | **Cascade track delete** with confirmation (I.3) | ✅ Done |
-| F4 | **Problems in Global Search** (I.4) | ✅ Done |
-| F5 | **SprintTaskV2 data model** — 20+ fields, capacityHours, priority, track, tags, links (II.1) | ✅ Done |
-| F6 | **SprintDashboardHeader** — stat cards, progress bar, track breakdown (II.2) | ✅ Done |
-| F7 | **5-column Kanban** — Backlog/ToDo/InProgress/Review/Done (II.3) | ✅ Done |
-| F8 | **Rich task cards** — priority badge, track chip, difficulty, est hours, tags, company, inline edit (II.4) | ✅ Done |
-| F9 | **Filter + search in Sprint Board** — 6 filter dimensions + clear (II.5) | ✅ Done |
-| F10 | **TaskDetailDialog** — full task editor with linked problems/resources, tags, notes (II.6) | ✅ Done |
-| F11 | **SprintAnalytics** — completed vs remaining, estimated vs actual, track breakdown (II.7) | ✅ Done |
-| F12 | **Dashboard quick status toggle** — one-click mark done from dashboard (II.8) | ✅ Done |
-| F13 | **Activity timeline integration** — sprint events logged via activityService (II.9) | ✅ Done |
-| F14 | **Backlog column** — uncommitted tasks in sprint board (II.10) | ✅ Done |
-| F15 | **FavoriteResourcesWidget** — bookmarked resources on dashboard | ✅ Done |
-| F16 | **Resources page** — rewritten with bookmarks | ✅ Done |
+| F1 | SprintTask order field | I.1 |
+| F2 | Optimistic updates for customLists | I.2 |
+| F3 | Cascade track delete with confirmation | I.3 |
+| F4 | Problems in Global Search | I.4 |
+| F5 | SprintTaskV2 data model | II.1 |
+| F6 | SprintDashboardHeader + SprintAnalytics | II.2 |
+| F7 | 5-column Kanban | II.3 |
+| F8 | Rich task cards | II.4 |
+| F9 | Filter + search in Sprint Board | II.5 |
+| F10 | TaskDetailDialog | II.6 |
+| F11 | SprintAnalytics | II.7 |
+| F12 | Dashboard quick status toggle | II.8 |
+| F13 | Activity timeline integration | II.9 |
+| F14 | Backlog column | II.10 |
+| F15 | FavoriteResourcesWidget | II.x |
+| F16 | Resources page rewrite | II.x |
+| F17 | Firestore indexes config | III.1 |
+| F18 | Cascade delete sprint tasks | III.2 |
+| F19 | Offline persistence | III.3 |
+| F20 | Toast notification system | III.4 |
+| F21 | Fix task query ordering | III.5 |
+| F22 | Smart Daily Mission | IV |
+| F23 | Real-time Firestore listeners | V |
+| F24 | Problem Workspace Revert & Polish | 23 |
+| F25 | Readiness Page Redesign | 22 |
+| F26 | Interview Readiness Dashboard | 21 |
+| F27 | Company Readiness | 17 |
+| F28 | Daily Mission & Goal Tracking | 16 |
+| F29 | Activity Page Redesign | — |
+| F30 | Mock Test page | — |
 
-### 🚀 Next Up (critical gaps to fix now)
+### ✅ Adaptive Sprint System (Phase 24)
+
+| # | Feature | Files |
+|---|---|---|
+| A1 | `SprintType` enum (learning/interview/certification/custom) | `sprints.ts` |
+| A2 | Interview fields: company, role, interviewDate, targetLevel, stages | `sprints.ts` |
+| A3 | Company templates: Google, Microsoft, Amazon, Meta, Apple, Netflix | `sprints.ts` (COMPANY_TEMPLATES) |
+| A4 | SprintDialog with type selector + company template dropdown | `SprintDialog.tsx` |
+| A5 | Focus Mode: auto-pause other active sprints on new activation | `useSprints.ts` |
+
+### ✅ Premium Focus Mode UX (Phase 25)
+
+| # | Feature | Files |
+|---|---|---|
+| B1 | "Paused" → "Suspended" with reason | `SprintCard.tsx` |
+| B2 | Focus Mode banner with reassurance message | `SprintDashboardHeader.tsx` |
+| B3 | InterviewCompleteDialog with outcome + resume/archive | New component |
+| B4 | SprintTimeline visual component | New component |
+| B5 | Suspended card + interview sprint CTA on dashboard | `sprints/page.tsx` |
+
+### ✅ Production Fixes (Phase 25b)
+
+| # | Fix | Files |
+|---|---|---|
+| C1 | `window.confirm` → ConfirmDialog | `sprints/page.tsx` |
+| C2 | `alert()` → toast.error | `mock-test/page.tsx` |
+| C3 | Toast dedup IDs across all hooks | `useSprints.ts`, `useTracks.ts`, `useResources.ts`, `useCustomLists.ts`, `useResourceProgress.ts` |
+| C4 | `aria-label` on icon-only delete button | Sprint detail view |
+| C5 | Emoji → SVG in error boundary | `error.tsx` |
+| C6 | `prefers-reduced-motion` for stagger | Global CSS |
+| C7 | `updateTask` catch bug (`sprintsRef` → `tasksRef`) | `useSprints.ts` |
+
+### 🚀 Next Up
 
 | # | Feature | Rationale | Effort |
 |---|---|---|---|
-| F17 | **Firestore indexes config** | Add `firestore.indexes.json` for all compound `orderBy` queries. Without this, app breaks at >10 docs. | 15 min |
-| F18 | **Cascade delete sprint tasks** | Delete `tasks` subcollection when sprint doc is deleted. | Small |
-| F19 | **Offline persistence** | Call `enableMultiTabIndexedDbPersistence()` in Firebase init. | Tiny (1 line) |
-| F20 | **Toast notification system** | Add Sonner/react-hot-toast for visual feedback on all CRUD actions. | 30 min |
-| F21 | **Fix task query ordering** | Switch `orderBy("addedAt")` → `orderBy("order")` in sprint task queries. | Small |
+| F31 | Track Merge / Archive | Full track lifecycle management | 2-3h |
+| F32 | Problem ↔ Resource Linking | Bridge parallel data systems | 3-4h |
+| F33 | AI Sprint Suggestions | Auto-generate next sprint from retro | 4-6h |
 
-### 💡 Innovative features (differentiator, high impact)
+### 📅 Later
 
 | # | Feature | Description |
 |---|---|---|
-| F22 | **AI-Powered Sprint Suggestions** | After retro, AI analyzes weaknesses and auto-creates next sprint with relevant tasks |
-| F23 | **Smart Daily Mission** | Widget that picks 1-2 tasks from active sprint + 1 revision item via spaced repetition |
-| F24 | **Track Merge / Archive** | Merge two tracks (combine resources), archive a track (hide but keep data) |
-| F25 | **Problem ↔ Resource Linking** | Link problems to knowledge resources and display chips on both sides |
-
-### 📅 Later (value-add but not critical)
-
-| # | Feature | Description |
-|---|---|---|
-| F26 | **Real-time Firestore listeners** | Convert `getDocs` → `onSnapshot` for live cross-device updates |
-| F27 | **PWA / Offline Support** | Service worker + cache-first strategy for static assets |
-| F28 | **Data Export / Import** | Export all user data as JSON; import to restore |
-| F29 | **Collaborative Sprints** | Share a sprint with another user via invite link; task assignment |
-| F30 | **Email/PW Auth + Anonymous** | Expand beyond Google Sign-In |
-| F31 | **Kanban Swimlanes** | Group sprint tasks by type or company within the board |
-| F32 | **Readiness Score History** | Track readiness score changes over time |
+| F34 | PWA / Offline Support | Service worker + cache-first strategy |
+| F35 | Data Export / Import | JSON export/import for all user data |
+| F36 | Collaborative Sprints | Sprint sharing + task assignment |
+| F37 | Kanban Swimlanes | Group sprint tasks by type or company |
+| F38 | Readiness Score History | Track readiness score changes over time |
+| F39 | Email/PW + Anonymous Auth | Expand beyond Google Sign-In |
 
 ---
 
@@ -301,26 +372,71 @@ RootLayout (layout.tsx)
 | Dashboard quick status toggle | `page.tsx` widget | ✅ |
 | Activity timeline integration | `activityService.ts` | ✅ |
 
-### Phase III — Critical Infrastructure Fixes (Now, ~3h)
+### Phase III — Critical Infrastructure Fixes ✅ DONE
 
-```
-F17 [15min] Add firestore.indexes.json for all compound orderBy queries
-F18 [30min] Add cascade delete for sprint tasks subcollection
-F19 [1min]  Enable offline persistence in Firebase init
-F20 [30min] Add toast notification system (Sonner)
-F21 [15min] Fix task query orderBy("addedAt") → orderBy("order")
-```
+| Item | Effort | Status |
+|---|---|---|
+| Add `firestore.indexes.json` | 15 min | ✅ |
+| Cascade delete sprint tasks subcollection | 30 min | ✅ |
+| Enable offline persistence | 1 min | ✅ |
+| Add Sonner toast notification system | 30 min | ✅ |
+| Fix task query `orderBy("addedAt")` → `orderBy("order")` | 15 min | ✅ |
 
-### Phase IV — High-Value Features (Next, ~6h)
+### Phase IV — Smart Daily Mission ✅ DONE
 
-```
-F23 [2h]  Smart Daily Mission widget
-F26 [2h]  Real-time Firestore listeners (onSnapshot)
-F24 [2h]  Track Merge / Archive
-F25 [2h]  Problem ↔ Resource Linking
-```
+| Item | Effort | Status |
+|---|---|---|
+| `computeDailyMission()` algorithm | 1h | ✅ |
+| Dashboard + Activity integration | 1h | ✅ |
 
-### Phase V+ — Future (see full roadmap above)
+### Phase V — Real-Time Firestore Listeners ✅ DONE
+
+| Item | Effort | Status |
+|---|---|---|
+| 5 subscribe* functions in services | 1h | ✅ |
+| 6 hooks switched to onSnapshot | 1.5h | ✅ |
+| Rollback simplification (prevSnapshot pattern) | 30 min | ✅ |
+
+### Phase 24 — Adaptive Sprint System ✅ DONE
+
+| Item | Effort | Status |
+|---|---|---|
+| SprintType + COMPANY_TEMPLATES | 30 min | ✅ |
+| SprintDialog type/company UI | 1h | ✅ |
+| Focus Mode (auto-pause) | 1h | ✅ |
+
+### Phase 25 — Premium Focus Mode UX ✅ DONE
+
+| Item | Effort | Status |
+|---|---|---|
+| Suspended label with reason | 30 min | ✅ |
+| Focus Mode banner | 30 min | ✅ |
+| InterviewCompleteDialog | 1h | ✅ |
+| SprintTimeline | 45 min | ✅ |
+| Empty state CTA | 30 min | ✅ |
+
+### Phase 25b — Production Readiness Fixes ✅ DONE
+
+| Item | Effort | Status |
+|---|---|---|
+| ConfirmDialog for sprint delete | 30 min | ✅ |
+| alert → toast in mock-test | 5 min | ✅ |
+| Toast dedup IDs (44+ calls) | 1h | ✅ |
+| aria-label on delete button | 5 min | ✅ |
+| Emoji → SVG in error boundary | 10 min | ✅ |
+| prefers-reduced-motion | 5 min | ✅ |
+| updateTask catch bug fix | 5 min | ✅ |
+
+### Upcoming
+
+| Phase | Title | Effort | Status |
+|---|---|---|---|
+| VI | Track Merge / Archive | 2-3h | ⬜ Future |
+| VII | Problem ↔ Resource Linking | 3-4h | ⬜ Future |
+| VIII | AI Sprint Suggestions | 4-6h | ⬜ Future |
+| IX | PWA / Offline Support | 3-4h | ⬜ Future |
+| X | Data Export / Import | 2-3h | ⬜ Future |
+| XI | Collaborative Sprints | 6-8h | ⬜ Future |
 
 ---
 
@@ -328,12 +444,13 @@ F25 [2h]  Problem ↔ Resource Linking
 
 | Concern | Current Approach | Recommendation |
 |---|---|---|
-| **Error handling** | Per-hook `setError` string; global `error.tsx` | Add per-page ErrorBoundary components |
+| **Error handling** | Per-hook `setError` string; global `error.tsx` (SVG icon, no emoji) | Consider per-page ErrorBoundary components |
 | **Loading states** | Each hook has its own `loading` bool; pages compose them with `||` | Consider `useCombinedLoading` utility for simplicity |
-| **Type safety** | Strong interfaces across SprintTaskV2, SprintV2, ActivityEvent | Consider `zod` runtime validation for Firestore reads |
+| **Type safety** | Strong interfaces across all data models | Consider `zod` runtime validation for Firestore reads |
 | **Performance** | All in-memory filtering; no virtualization | If resources >500, consider `react-window` for grid lists |
-| **Accessibility** | Skip-to-content link, aria-labels on interactive elements | Audit with axe-core; add focus trapping in dialogs |
+| **Accessibility** | Skip-to-content link, aria-labels on interactive elements, report-validity on custom select | Audit with axe-core; add focus trapping in dialogs |
 | **Testing** | None | Start with `vitest` on pure functions (readiness scoring, stats computation) |
+| **Toast consistency** | Unique IDs on all calls but naming conventions vary (e.g. `"success"` vs `"toast-success"`) | Centralize toast ID constants |
 
 ---
 

@@ -72,13 +72,13 @@ export const useResourceProgress = (uid?: string | null) => {
 
       try {
         await saveResourceProgress(uid, next);
-        toast.success("Progress saved");
+        toast.success("Progress saved", { id: "progress-saved" });
       } catch (err) {
         const reverted = { ...progressMapRef.current, [resourceId]: current };
         progressMapRef.current = reverted;
         setProgressMap(reverted);
         setError(err instanceof Error ? err.message : "Unable to save resource progress.");
-        toast.error("Failed to save progress");
+        toast.error("Failed to save progress", { id: "progress-save-error" });
       }
     },
     [uid]

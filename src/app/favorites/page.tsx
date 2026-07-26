@@ -17,9 +17,11 @@ import type { KnowledgeResource, DifficultyLevel, ResourceLink } from "@/lib/kno
 
 export default function FavoritesPage() {
   const auth = useAuth();
-  const { resources, addResource, updateResource, deleteResource } = useResources(auth.user?.uid);
-  const { progressMap, setStatus, toggleRevision, toggleFavorite, savePersonalNotes } = useResourceProgress(auth.user?.uid);
-  const { tracks } = useTracks(auth.user?.uid);
+  const { resources, addResource, updateResource, deleteResource, loading: resourcesLoading, error: resourcesError } = useResources(auth.user?.uid);
+  const { progressMap, setStatus, toggleRevision, toggleFavorite, savePersonalNotes, loading: progressLoading } = useResourceProgress(auth.user?.uid);
+  const { tracks, loading: tracksLoading } = useTracks(auth.user?.uid);
+  const isLoading = resourcesLoading || progressLoading || tracksLoading;
+  const hasError = resourcesError;
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingResource, setEditingResource] = useState<KnowledgeResource | null>(null);
   const [addToTrack, setAddToTrack] = useState<string | null>(null);
@@ -94,7 +96,21 @@ export default function FavoritesPage() {
       />
 
       <div className="mx-auto max-w-7xl p-4 sm:px-6 lg:px-8 pb-10 animate-in fade-in slide-in-from-bottom-2 duration-500">
-        {favorites.length === 0 ? (
+        {isLoading && (
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <div key={i} className="rounded-lg border border-border/70 bg-card/90 p-4 h-32 animate-pulse" />
+            ))}
+          </div>
+        )}
+
+        {hasError && !isLoading && (
+          <div className="rounded-xl border border-destructive/30 bg-destructive/10 px-4 py-8 text-center">
+            <p className="text-sm text-destructive">Failed to load favorites. Please try again.</p>
+          </div>
+        )}
+
+        {!isLoading && !hasError && favorites.length === 0 ? (
           <div className="rounded-xl border border-dashed border-border bg-card/50 px-4 py-16 text-center">
             <Heart className="mx-auto size-10 text-muted-foreground/30 mb-3" />
             <p className="text-sm text-muted-foreground">No favorites yet</p>
@@ -102,7 +118,7 @@ export default function FavoritesPage() {
               Click the <Heart className="size-3 inline" /> icon on any resource to favorite it for quick access
             </p>
           </div>
-        ) : (
+        ) : !isLoading && !hasError && favorites.length > 0 && (
           <div className="space-y-6">
             {Object.entries(grouped).map(([trackId, items]) => (
               <div key={trackId}>

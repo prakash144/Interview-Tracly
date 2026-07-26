@@ -1,7 +1,7 @@
 "use client";
 
 import { memo, useState } from "react";
-import { Calendar, Clock, EllipsisVertical, Eye, Heart, Link as LinkIcon, PencilLine, Star, Trash2 } from "lucide-react";
+import { Calendar, Clock, EllipsisVertical, Eye, Heart, Link as LinkIcon, PencilLine, Star, Trash2, Archive, RotateCcw } from "lucide-react";
 import type { KnowledgeResource, ResourceStatus, UserResourceProgress } from "@/lib/knowledgeBase";
 import { STATUS_COLORS, STATUS_LABELS, LINK_TYPE_ICONS, LINK_LABELS } from "@/lib/knowledgeBase";
 import DifficultyBadge from "@/components/data-display/DifficultyBadge";
@@ -20,6 +20,8 @@ interface ResourceCardProps {
   onSaveNotes?: (resourceId: string, notes: string) => void;
   onEdit?: (resource: KnowledgeResource) => void;
   onDelete?: (resourceId: string) => void;
+  onArchive?: (resourceId: string) => void;
+  onRestore?: (resourceId: string) => void;
 }
 
 const statusOptions: { value: ResourceStatus; label: string }[] = [
@@ -45,6 +47,8 @@ const ResourceCard = ({
   onSaveNotes,
   onEdit,
   onDelete,
+  onArchive,
+  onRestore,
 }: ResourceCardProps) => {
   const [menuOpen, setMenuOpen] = useState(false);
   const [viewerOpen, setViewerOpen] = useState(false);
@@ -116,6 +120,29 @@ const ResourceCard = ({
                     <LinkIcon className="size-3.5" />
                     Copy Link
                   </button>
+                )}
+                {resource.archivedAt ? (
+                  onRestore && (
+                    <button
+                      type="button"
+                      onMouseDown={() => { onRestore(resource.id); setMenuOpen(false); }}
+                      className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-foreground hover:bg-accent transition-colors"
+                    >
+                      <RotateCcw className="size-3.5" />
+                      Restore
+                    </button>
+                  )
+                ) : (
+                  onArchive && (
+                    <button
+                      type="button"
+                      onMouseDown={() => { onArchive(resource.id); setMenuOpen(false); }}
+                      className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-foreground hover:bg-accent transition-colors"
+                    >
+                      <Archive className="size-3.5" />
+                      Archive
+                    </button>
+                  )
                 )}
                 {onDelete && (
                   <>

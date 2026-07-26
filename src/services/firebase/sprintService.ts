@@ -5,6 +5,7 @@ import {
   getDoc,
   deleteDoc,
   setDoc,
+  updateDoc,
   query,
   orderBy,
   onSnapshot,
@@ -73,7 +74,10 @@ export const getSprintTasks = async (uid: string, sprintId: string): Promise<Spr
 };
 
 export const addSprint = async (uid: string, sprint: Sprint): Promise<void> => {
-  await setDoc(sprintDoc(uid, sprint.id), sprint);
+  const clean = Object.fromEntries(
+    Object.entries(sprint).filter(([, v]) => v !== undefined)
+  ) as Sprint;
+  await setDoc(sprintDoc(uid, sprint.id), clean);
 };
 
 export const updateSprint = async (
@@ -82,6 +86,14 @@ export const updateSprint = async (
   data: Partial<Sprint>
 ): Promise<void> => {
   await setDoc(sprintDoc(uid, sprintId), data, { merge: true });
+};
+
+export const archiveSprint = async (uid: string, sprintId: string): Promise<void> => {
+  await updateDoc(sprintDoc(uid, sprintId), { archivedAt: Date.now(), updatedAt: Date.now() });
+};
+
+export const restoreSprint = async (uid: string, sprintId: string): Promise<void> => {
+  await updateDoc(sprintDoc(uid, sprintId), { archivedAt: null, updatedAt: Date.now() });
 };
 
 export const deleteSprint = async (uid: string, sprintId: string): Promise<void> => {

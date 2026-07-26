@@ -1,8 +1,117 @@
-# Implementation Plan — Final Polish & Problem Workspace Revert
+# Implementation Plan
 
-> **Status:** Phase 23 complete.
+> **Status:** Phase 25b complete. All known gaps resolved.
 
-## Latest: Phase 23 — Final Polish & Problem Workspace Revert — ✅
+## Latest: Phase 25b — Production Readiness Fixes — ✅
+
+### Goal
+End-to-end production polish: replace legacy browser APIs with proper UI components, fix accessibility gaps, ensure build is clean.
+
+### Changes Made
+
+| Fix | Files | Detail |
+|---|---|---|
+| `window.confirm` → `ConfirmDialog` | `sprints/page.tsx` | Destructive action confirmation with proper dialog |
+| `alert()` → `toast.error` | `mock-test/page.tsx` | Error feedback using Sonner toast |
+| Toast dedup IDs | 5 hooks (44+ calls) | Unique `id` on every `toast.success`/`toast.error`/`toast()` call across `useSprints.ts`, `useTracks.ts`, `useResources.ts`, `useCustomLists.ts`, `useResourceProgress.ts` |
+| `aria-label` on delete button | Sprint detail view | Accessibility for icon-only button |
+| Emoji → SVG in error boundary | `error.tsx` | `AlertTriangle` icon replaces emoji |
+| `prefers-reduced-motion` | Global CSS | `.stagger-group` animation disabled for accessibility |
+| `updateTask` catch bug | `useSprints.ts` | Fixed `sprintsRef` → `tasksRef` in rollback |
+
+### Validation
+- `npm run build` — **23 static routes, 0 errors, 0 warnings**, 102KB shared JS
+- `npm run lint` — 0 errors (only pre-existing CompanyLogo warning)
+- Light + Dark mode consistent
+
+---
+
+## Phase 25 — Premium Focus Mode UX — ✅
+
+### Goal
+Refine focus mode for Interview Sprints: better labels, completion dialog, timeline visualization, and enhanced empty states.
+
+### Changes Made
+
+#### SprintCard
+- "Paused" → "Suspended" with reason text (e.g., "Suspended by Interview Prep")
+- Visual indicator that sprint is suspended
+
+#### SprintDashboardHeader
+- Focus Mode banner with reassurance: "You're in Focus Mode. Stay on track."
+- Action buttons: resume suspended sprint, view interview details
+
+#### InterviewCompleteDialog (new)
+- Opens when user completes an Interview Sprint
+- Outcome selection: Selected / Rejected / No response / Withdrew
+- Post-interview actions: Resume suspended sprint, archive completed sprint
+- Wired into `sprints/page.tsx` sprint completion flow
+
+#### SprintTimeline (new)
+- Visual component showing sprint transitions (planned → active → completed/suspended)
+- Displays timeline events with dates and status changes
+
+#### Dashboard Enhanced
+- Suspended sprint card shown on main sprints page
+- Empty state CTA: "Ready for an interview? Create an Interview Sprint"
+
+#### Files
+| File | Change |
+|---|---|
+| `src/app/components/sprints/InterviewCompleteDialog.tsx` | New |
+| `src/app/components/sprints/SprintTimeline.tsx` | New |
+| `src/app/components/sprints/SprintCard.tsx` | Suspended label |
+| `src/app/components/sprints/SprintDashboardHeader.tsx` | Focus Mode banner |
+| `src/app/sprints/page.tsx` | ConfirmDialog + InterviewComplete + suspended card + CTA |
+
+### Design Principles
+- Reassuring language in Focus Mode (not punitive)
+- Clear visual distinction between active, suspended, and completed states
+- Sprint Timeline provides historical context for sprint transitions
+
+---
+
+## Phase 24 — Adaptive Sprint System — ✅
+
+### Goal
+Redesign the Sprint module to support multiple sprint types (learning, interview, certification, custom) with company templates and focus mode.
+
+### Changes Made
+
+#### Sprint Data Model
+- `SprintType`: `"learning" | "interview" | "certification" | "custom"` added to `Sprint` interface
+- Interview-specific fields: `company`, `role`, `interviewDate`, `targetLevel`, `stages`, `template`
+- Focus mode: `pausedSprintId?` tracks the sprint auto-paused when activating a new one
+
+#### Company Templates
+- `COMPANY_TEMPLATES` in `src/lib/sprints.ts`: Google, Microsoft, Amazon, Meta, Apple, Netflix
+- Each template: `requiredTopics[]`, `optionalTopics[]`, `difficultyBreakdown`, `typicalStages[]`, `preparationWeeks`
+
+#### SprintDialog
+- Type selector (Learning / Interview / Certification / Custom)
+- Company template dropdown (shown for Interview type)
+- Conditional fields: company, role, interview date, target level, stages
+
+#### Focus Mode
+- `activateSprint` auto-pauses any other active sprint, storing reference in `pausedSprintId`
+- Only one sprint active at a time
+- Resuming a sprint does not re-activate the one that suspended it
+
+#### Files
+| File | Change |
+|---|---|
+| `src/lib/sprints.ts` | SprintType, interview fields, COMPANY_TEMPLATES |
+| `src/app/components/sprints/SprintDialog.tsx` | Type selector, templates, interview fields |
+| `src/hooks/useSprints.ts` | Focus mode pause/resume |
+
+### Design Principles
+- Interview Sprint is the "special" type with the most additional fields
+- Templates provide curated starting points without forcing any prep plan
+- Focus Mode is a constraint (one active sprint at a time) that feels like a feature
+
+---
+
+## Previous: Phase 23 — Final Polish & Problem Workspace Revert — ✅
 
 ### Goal
 Production-quality polish across the entire app: theme consistency, accessibility, performance, micro-interactions, and reverting the Problem Workspace page to pre-collections UI/UX.

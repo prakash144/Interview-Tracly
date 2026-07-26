@@ -2,8 +2,8 @@
 
 import { useMemo } from "react";
 import { cn } from "@/lib/utils";
-import { Clock, Target, Gauge, ListChecks } from "lucide-react";
-import type { SprintTaskV2 } from "@/lib/sprints";
+import { Clock, Target, Gauge, ListChecks, Briefcase, AlertTriangle, PauseCircle, Eye } from "lucide-react";
+import type { SprintTaskV2, SprintType } from "@/lib/sprints";
 
 interface SprintDashboardHeaderProps {
   name: string;
@@ -12,6 +12,14 @@ interface SprintDashboardHeaderProps {
   endDate: string;
   tasks: SprintTaskV2[];
   capacityHours?: number;
+  type?: SprintType;
+  company?: string;
+  role?: string;
+  interviewDate?: string;
+  targetLevel?: string;
+  suspendedSprintName?: string;
+  onViewSprint?: (id: string) => void;
+  suspendedSprintId?: string;
 }
 
 const StatCard = ({
@@ -67,6 +75,14 @@ const SprintDashboardHeader = ({
   endDate,
   tasks,
   capacityHours,
+  type,
+  company,
+  role,
+  interviewDate,
+  targetLevel,
+  suspendedSprintName,
+  onViewSprint,
+  suspendedSprintId,
 }: SprintDashboardHeaderProps) => {
   const stats = useMemo(() => {
     const total = tasks.length;
@@ -91,8 +107,81 @@ const SprintDashboardHeader = ({
     return { total, done, inProgress, review, completion, estimatedHours, actualHours, remainingHours, tracks };
   }, [tasks]);
 
+  const countdown = useMemo(() => {
+    if (!interviewDate) return null;
+    const diff = new Date(interviewDate).getTime() - Date.now();
+    if (diff <= 0) return { days: 0, urgent: false };
+    const days = Math.ceil(diff / 86400000);
+    return { days, urgent: days <= 3 };
+  }, [interviewDate]);
+
   return (
     <div className="rounded-xl border border-border/60 bg-card/50 p-5 space-y-4 animate-in fade-in slide-in-from-top-1 duration-300">
+      {type === "interview" && (
+        <div className={cn(
+          "rounded-lg border p-4 space-y-3 animate-in fade-in slide-in-from-top-2 duration-500",
+          countdown?.urgent ? "border-destructive/20 bg-destructive/5" : "border-cyan-500/20 bg-cyan-500/5"
+        )}>
+          <div className="flex items-start gap-3">
+            <div className={cn(
+              "flex size-9 items-center justify-center rounded-full shrink-0",
+              countdown?.urgent ? "bg-destructive/10 text-destructive" : "bg-cyan-500/10 text-cyan-500"
+            )}>
+              {countdown?.urgent ? <AlertTriangle className="size-4" /> : <Briefcase className="size-4" />}
+            </div>
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-sm font-semibold text-foreground">Interview Focus Mode</p>
+                {countdown && (
+                  <span className={cn(
+                    "text-xl font-bold tabular-nums",
+                    countdown.urgent ? "text-destructive" : "text-cyan-500"
+                  )}>
+                    {countdown.days}d
+                  </span>
+                )}
+              </div>
+              {company && (
+                <p className="text-xs text-muted-foreground/70 mt-0.5">
+                  {company}{role ? ` — ${role}` : ""}{targetLevel ? ` · Target: ${targetLevel}` : ""}
+                </p>
+              )}
+            </div>
+          </div>
+
+          {suspendedSprintName && (
+            <div className="rounded-md bg-amber-500/5 border border-amber-500/10 p-2.5 space-y-1">
+              <p className="text-[11px] text-amber-600/80 flex items-center gap-1.5">
+                <PauseCircle className="size-3" />
+                <span><span className="font-medium">{suspendedSprintName}</span> has been safely suspended.</span>
+              </p>
+              <p className="text-[10px] text-amber-600/50 italic">Nothing has been lost. It will be available to resume after the interview.</p>
+            </div>
+          )}
+
+          <div className="flex gap-2">
+            {onViewSprint && (
+              <button
+                onClick={() => onViewSprint("__current__")}
+                className="h-7 text-[10px] px-2.5 rounded-md bg-cyan-500/10 text-cyan-600 hover:bg-cyan-500/20 transition-colors inline-flex items-center gap-1 font-medium"
+              >
+                <Eye className="size-3" />
+                View Interview Sprint
+              </button>
+            )}
+            {suspendedSprintId && onViewSprint && (
+              <button
+                onClick={() => onViewSprint(suspendedSprintId)}
+                className="h-7 text-[10px] px-2.5 rounded-md bg-amber-500/10 text-amber-600 hover:bg-amber-500/20 transition-colors inline-flex items-center gap-1 font-medium"
+              >
+                <Eye className="size-3" />
+                View Suspended Sprint
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0">
           <h2 className="text-base font-semibold text-foreground">{name}</h2>

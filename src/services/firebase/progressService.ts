@@ -21,15 +21,20 @@ const activityDoc = (uid: string, date: string) =>
 
 export const subscribeProgress = (
   uid: string,
-  callback: (progress: ProgressMap) => void
+  callback: (progress: ProgressMap) => void,
+  onError?: (error: Error) => void
 ): (() => void) => {
-  const unsub = onSnapshot(progressCollection(uid), (snapshot) => {
-    const progress: ProgressMap = {};
-    snapshot.forEach((d) => {
-      progress[d.id] = d.data() as UserProblemProgress;
-    });
-    callback(progress);
-  });
+  const unsub = onSnapshot(
+    progressCollection(uid),
+    (snapshot) => {
+      const progress: ProgressMap = {};
+      snapshot.forEach((d) => {
+        progress[d.id] = d.data() as UserProblemProgress;
+      });
+      callback(progress);
+    },
+    (error) => { if (onError) onError(error); }
+  );
   return unsub;
 };
 

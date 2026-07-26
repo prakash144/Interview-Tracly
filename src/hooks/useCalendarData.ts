@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { getUserActivity, type DailyActivity } from "@/services/firebase/progressService";
 import type { Problem, ProgressMap } from "@/lib/progressTypes";
 
@@ -339,19 +339,20 @@ export function useCalendarData(
     return filtered;
   }, [dayData, start, end]);
 
-  const navigateMonth = (delta: number) => {
-    let newMonth = viewMonth + delta;
-    let newYear = viewYear;
-    if (newMonth > 11) { newMonth = 0; newYear++; }
-    if (newMonth < 0) { newMonth = 11; newYear--; }
-    setViewMonth(newMonth);
-    setViewYear(newYear);
-  };
+  const navigateMonth = useCallback((delta: number) => {
+    setViewMonth((prev) => {
+      let newMonth = prev + delta;
+      if (newMonth > 11) { setViewYear((y) => y + 1); newMonth = 0; }
+      if (newMonth < 0) { setViewYear((y) => y - 1); newMonth = 11; }
+      return newMonth;
+    });
+  }, []);
 
-  const goToToday = () => {
-    setViewYear(new Date().getFullYear());
-    setViewMonth(new Date().getMonth());
-  };
+  const goToToday = useCallback(() => {
+    const now = new Date();
+    setViewYear(now.getFullYear());
+    setViewMonth(now.getMonth());
+  }, []);
 
   const isCurrentMonth = viewYear === new Date().getFullYear() && viewMonth === new Date().getMonth();
 

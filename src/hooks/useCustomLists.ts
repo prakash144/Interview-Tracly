@@ -58,12 +58,12 @@ export const useCustomLists = (uid?: string | null) => {
       setLists(next);
       try {
         await listService.createCustomList(uid, name, description || "");
-        toast.success("List created");
+        toast.success("List created", { id: "list-created" });
       } catch {
         const rolled = listsRef.current.filter((l) => l.id !== optimistic.id);
         listsRef.current = rolled;
         setLists(rolled);
-        toast.error("Failed to create list");
+        toast.error("Failed to create list", { id: "list-create-error" });
       }
     },
     [uid]
@@ -80,11 +80,11 @@ export const useCustomLists = (uid?: string | null) => {
       setLists(next);
       try {
         await listService.renameCustomList(uid, listId, name);
-        toast.success("List renamed");
+        toast.success("List renamed", { id: "list-renamed" });
       } catch {
         listsRef.current = prev;
         setLists(prev);
-        toast.error("Failed to rename list");
+        toast.error("Failed to rename list", { id: "list-rename-error" });
       }
     },
     [uid]
@@ -99,11 +99,11 @@ export const useCustomLists = (uid?: string | null) => {
       setLists(next);
       try {
         await listService.deleteCustomList(uid, listId);
-        toast.success("List deleted");
+        toast.success("List deleted", { id: "list-deleted" });
       } catch {
         listsRef.current = prev;
         setLists(prev);
-        toast.error("Failed to delete list");
+        toast.error("Failed to delete list", { id: "list-delete-error" });
       }
     },
     [uid]
@@ -122,11 +122,11 @@ export const useCustomLists = (uid?: string | null) => {
       setLists(next);
       try {
         await listService.addProblemToList(uid, listId, problemId);
-        toast.success("Problem added to list");
+        toast.success("Problem added to list", { id: "problem-added-to-list" });
       } catch {
         listsRef.current = prev;
         setLists(prev);
-        toast.error("Failed to add problem to list");
+        toast.error("Failed to add problem to list", { id: "problem-add-to-list-error" });
       }
     },
     [uid]
@@ -145,11 +145,11 @@ export const useCustomLists = (uid?: string | null) => {
       setLists(next);
       try {
         await listService.removeProblemFromList(uid, listId, problemId);
-        toast.success("Problem removed from list");
+        toast.success("Problem removed from list", { id: "problem-removed-from-list" });
       } catch {
         listsRef.current = prev;
         setLists(prev);
-        toast.error("Failed to remove problem from list");
+        toast.error("Failed to remove problem from list", { id: "problem-remove-from-list-error" });
       }
     },
     [uid]

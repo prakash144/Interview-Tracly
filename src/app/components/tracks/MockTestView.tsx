@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { loadHistory } from "@/lib/mockTest";
+import { loadHistory, computeSummary } from "@/lib/mockTest";
 import type { MockTestResult } from "@/lib/mockTest";
 import { Timer, Play, SkipForward, Lightbulb, TrendingUp } from "lucide-react";
 
@@ -18,7 +18,7 @@ export default function MockTestView({ onBack }: { onBack: () => void }) {
   useEffect(() => { setHistory(loadHistory()); }, []);
 
   const totalTests = history.length;
-  const totalSolved = history.reduce((sum, r) => sum + r.problems.filter((p) => p.solved).length, 0);
+  const totalSolved = history.reduce((sum, r) => sum + computeSummary(r).solved, 0);
   const totalProblems = history.reduce((sum, r) => sum + r.problems.length, 0);
   const avgAccuracy = totalProblems > 0 ? Math.round((totalSolved / totalProblems) * 100) : 0;
 
@@ -58,14 +58,13 @@ export default function MockTestView({ onBack }: { onBack: () => void }) {
           <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Recent Results</h4>
           <div className="space-y-1.5 max-h-48 overflow-y-auto">
             {history.slice(0, 8).map((r) => {
-              const s = r.problems.filter((p) => p.solved).length;
-              const sk = r.problems.filter((p) => p.skipped).length;
+              const r2 = computeSummary(r);
               const h = r.problems.filter((p) => p.usedHint).length;
               return (
                 <div key={r.id} className="flex items-center gap-3 rounded-md bg-gray-800/30 px-3 py-2 text-xs">
                   <span className="text-muted-foreground tabular-nums shrink-0 w-16">{new Date(r.startedAt).toLocaleDateString()}</span>
-                  <span className="text-success font-medium">{s}/{r.problems.length}</span>
-                  {sk > 0 && <span className="text-muted-foreground flex items-center gap-0.5"><SkipForward className="size-3" />{sk}</span>}
+                  <span className="text-success font-medium">{r2.solved}/{r.problems.length}</span>
+                  {r2.unsolved > 0 && <span className="text-muted-foreground flex items-center gap-0.5"><SkipForward className="size-3" />{r2.unsolved}</span>}
                   {h > 0 && <span className="text-warning flex items-center gap-0.5"><Lightbulb className="size-3" />{h}</span>}
                   <span className="text-muted-foreground ml-auto tabular-nums">{formatTime(r.totalTimeSeconds)}</span>
                 </div>

@@ -42,9 +42,13 @@ export const useTracks = (uid?: string | null) => {
     const unsub = trackService.subscribeTracks(uid,
       (data) => {
         if (data.length === 0) {
-          for (const t of DEFAULT_TRACKS) {
-            trackService.addTrack(uid, t).catch(() => {});
-          }
+          Promise.all(
+            DEFAULT_TRACKS.map(t =>
+              trackService.addTrack(uid, t).catch(() => {
+                console.warn("Failed to seed default track:", t.id);
+              })
+            )
+          );
           tracksRef.current = DEFAULT_TRACKS;
           setTracks(DEFAULT_TRACKS);
         } else {
@@ -81,11 +85,11 @@ export const useTracks = (uid?: string | null) => {
         const prevSnapshot = [...tracksRef.current];
         try {
           await trackService.addTrack(uid, track);
-          toast.success("Track created");
+          toast.success("Track created", { id: "track-created" });
         } catch {
           tracksRef.current = prevSnapshot;
           setTracks(prevSnapshot);
-          toast.error("Failed to create track");
+          toast.error("Failed to create track", { id: "track-create-error" });
         }
       }
     },
@@ -103,11 +107,11 @@ export const useTracks = (uid?: string | null) => {
       if (uid) {
         try {
           await trackService.updateTrack(uid, trackId, data);
-          toast.success("Track updated");
+          toast.success("Track updated", { id: "track-updated" });
         } catch {
           tracksRef.current = prevSnapshot;
           setTracks(prevSnapshot);
-          toast.error("Failed to update track");
+          toast.error("Failed to update track", { id: "track-update-error" });
         }
       }
     },
@@ -123,11 +127,11 @@ export const useTracks = (uid?: string | null) => {
       if (uid) {
         try {
           await trackService.deleteTrack(uid, trackId);
-          toast.success("Track deleted");
+          toast.success("Track deleted", { id: "track-deleted" });
         } catch {
           tracksRef.current = prevSnapshot;
           setTracks(prevSnapshot);
-          toast.error("Failed to delete track");
+          toast.error("Failed to delete track", { id: "track-delete-error" });
         }
       }
     },
@@ -145,11 +149,11 @@ export const useTracks = (uid?: string | null) => {
       if (uid) {
         try {
           await trackService.archiveTrack(uid, trackId, archived);
-          toast.success(archived ? "Track archived" : "Track restored");
+          toast.success(archived ? "Track archived" : "Track restored", { id: archived ? "track-archived" : "track-restored" });
         } catch {
           tracksRef.current = prevSnapshot;
           setTracks(prevSnapshot);
-          toast.error("Failed to update track");
+          toast.error("Failed to update track", { id: "track-update-error" });
         }
       }
     },
@@ -165,11 +169,11 @@ export const useTracks = (uid?: string | null) => {
       if (uid) {
         try {
           await trackService.mergeTracks(uid, sourceId, targetId);
-          toast.success("Tracks merged");
+          toast.success("Tracks merged", { id: "tracks-merged" });
         } catch {
           tracksRef.current = prevSnapshot;
           setTracks(prevSnapshot);
-          toast.error("Failed to merge tracks");
+          toast.error("Failed to merge tracks", { id: "tracks-merge-error" });
         }
       }
     },

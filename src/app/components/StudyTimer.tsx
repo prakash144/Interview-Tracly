@@ -97,7 +97,7 @@ export function StudyTimer() {
               <span className="text-muted-foreground/50 shrink-0">
                 {new Date(s.startTime).toLocaleDateString(undefined, { month: "short", day: "numeric" })}
               </span>
-              <button onClick={() => deleteSessionById(s.id)} className="size-5 flex items-center justify-center opacity-0 group-hover:opacity-100 hover:text-destructive transition-all">
+              <button onClick={() => deleteSessionById(s.id)} aria-label={`Delete session: ${s.focusArea || "Focused study"}`} className="size-5 flex items-center justify-center opacity-0 group-hover:opacity-100 focus:opacity-100 hover:text-destructive transition-all">
                 <Trash2 className="size-3" />
               </button>
             </div>

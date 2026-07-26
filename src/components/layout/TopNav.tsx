@@ -26,7 +26,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import UserMenu from "./UserMenu";
-import GlobalSearch from "./GlobalSearch";
+import CommandCenter from "./CommandCenter";
 
 interface TopNavProps {
   user?: User | null;
@@ -298,7 +298,7 @@ const TopNav = ({
         {/* Right: Utilities */}
         <div className="flex items-center gap-1">
           <SearchTrigger onClick={handleSearchOpen} />
-          <GlobalSearch uid={user?.uid} open={searchOpen} onOpenChange={setSearchOpen} />
+          <CommandCenter uid={user?.uid} open={searchOpen} onOpenChange={setSearchOpen} />
 
           <ThemeToggle />
 

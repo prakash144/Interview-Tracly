@@ -333,6 +333,11 @@
     scroll-behavior: auto !important;
     transition-duration: 0.01ms !important;
   }
+  .stagger-group > * {
+    animation: none !important;
+    opacity: 1 !important;
+    transform: none !important;
+  }
 }
 
 /* ── View Transitions API (progressive enhancement) ── */

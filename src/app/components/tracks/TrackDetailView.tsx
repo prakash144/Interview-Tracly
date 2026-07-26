@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useParams, notFound } from "next/navigation";
 import { Plus, RotateCcw, ChevronDown, Search, ArrowUpDown, FolderKanban, BookOpen, ChevronLeft } from "lucide-react";
 import Link from "next/link";
@@ -48,6 +48,10 @@ const TrackDetailView = () => {
   const [showRevisionOnly, setShowRevisionOnly] = useState(false);
   const [sortField, setSortField] = useState<SortField>("askedAt");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
+
+  // Pagination
+  const PAGE_SIZE = 20;
+  const [resourcePage, setResourcePage] = useState(0);
 
   // Dialog state
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -143,13 +147,24 @@ const TrackDetailView = () => {
 
   const hasActiveFilters = Boolean(searchTerm || difficultyFilter || companyFilter || statusFilter || showRevisionOnly);
 
+  const paginatedResources = useMemo(() => {
+    return filteredResources.slice(resourcePage * PAGE_SIZE, (resourcePage + 1) * PAGE_SIZE);
+  }, [filteredResources, resourcePage]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredResources.length / PAGE_SIZE));
+
   const resetFilters = () => {
     setSearchTerm("");
     setDifficultyFilter("");
     setCompanyFilter("");
     setStatusFilter("");
     setShowRevisionOnly(false);
+    setResourcePage(0);
   };
+
+  useEffect(() => {
+    setResourcePage(0);
+  }, [searchTerm, difficultyFilter, companyFilter, statusFilter, showRevisionOnly, sortField, sortDir]);
 
   const toggleSort = (field: SortField) => {
     if (sortField === field) {
@@ -165,6 +180,16 @@ const TrackDetailView = () => {
     resources.forEach((r) => r.tags.forEach((t) => { counts[t] = (counts[t] || 0) + 1; }));
     return counts;
   }, [resources]);
+
+  const completedCount = useMemo(
+    () => resources.filter((r) => progressMap[r.id]?.status === "completed").length,
+    [resources, progressMap]
+  );
+
+  const revisionCount = useMemo(
+    () => resources.filter((r) => progressMap[r.id]?.inRevisionList).length,
+    [resources, progressMap]
+  );
 
   const companiesUsed = useMemo(() => {
     const set = new Set(resources.map((r) => r.company));
@@ -330,9 +355,9 @@ const TrackDetailView = () => {
           {resources.length > 0 && (
             <>
               <span className="w-px h-3 bg-border" />
-              <span>{resources.filter((r) => progressMap[r.id]?.status === "completed").length} completed</span>
+              <span>{completedCount} completed</span>
               <span className="w-px h-3 bg-border" />
-              <span>{resources.filter((r) => progressMap[r.id]?.inRevisionList).length} in revision</span>
+              <span>{revisionCount} in revision</span>
               <span className="w-px h-3 bg-border" />
               <span>{Object.keys(tagCounts).length} unique tags</span>
             </>
@@ -342,22 +367,52 @@ const TrackDetailView = () => {
         {/* Resource Grid */}
         <div className="mt-1">
           {filteredResources.length > 0 ? (
-            <div className="grid gap-3 sm:grid-cols-2">
-              {filteredResources.map((resource) => (
-                <ResourceCard
-                  key={resource.id}
-                  resource={resource}
-                  progress={progressMap[resource.id]}
-                  progressEnabled={Boolean(auth.user)}
-                  onRequireAuth={auth.login}
-                  onStatusChange={setStatus}
-                  onToggleRevision={toggleRevision}
-                  onSaveNotes={savePersonalNotes}
-                  onEdit={handleEdit}
-                  onDelete={handleDeleteRequest}
-                />
-              ))}
-            </div>
+            <>
+              <div className="grid gap-3 sm:grid-cols-2">
+                {paginatedResources.map((resource) => (
+                  <ResourceCard
+                    key={resource.id}
+                    resource={resource}
+                    progress={progressMap[resource.id]}
+                    progressEnabled={Boolean(auth.user)}
+                    onRequireAuth={auth.login}
+                    onStatusChange={setStatus}
+                    onToggleRevision={toggleRevision}
+                    onSaveNotes={savePersonalNotes}
+                    onEdit={handleEdit}
+                    onDelete={handleDeleteRequest}
+                  />
+                ))}
+              </div>
+              {filteredResources.length > PAGE_SIZE && (
+                <div className="flex items-center justify-between mt-4 text-xs">
+                  <span className="text-muted-foreground">
+                    Showing {resourcePage * PAGE_SIZE + 1}–{Math.min((resourcePage + 1) * PAGE_SIZE, filteredResources.length)} of{" "}
+                    {filteredResources.length}
+                  </span>
+                  <div className="flex gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-7 text-xs"
+                      disabled={resourcePage === 0}
+                      onClick={() => setResourcePage((p) => Math.max(0, p - 1))}
+                    >
+                      Previous
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-7 text-xs"
+                      disabled={resourcePage >= totalPages - 1}
+                      onClick={() => setResourcePage((p) => p + 1)}
+                    >
+                      Next
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </>
           ) : (
             <div className="rounded-xl border border-dashed border-border bg-card/70 px-4 py-16 text-center">
               <div className="flex justify-center mb-3">

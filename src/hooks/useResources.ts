@@ -101,13 +101,13 @@ export const useResources = (uid?: string | null, trackId?: TrackId) => {
       if (uid) {
         try {
           await resourceService.addResource(uid, resource);
-          toast.success("Resource added");
+          toast.success("Resource added", { id: "resource-added" });
         } catch (err) {
           const reverted = resourcesRef.current.filter((r) => r.id !== resource.id);
           resourcesRef.current = reverted;
           setResources(reverted);
           setError(err instanceof Error ? err.message : "Failed to add resource");
-          toast.error("Failed to add resource");
+          toast.error("Failed to add resource", { id: "resource-add-error" });
         }
       }
     },
@@ -128,12 +128,12 @@ export const useResources = (uid?: string | null, trackId?: TrackId) => {
         const prevSnapshot = [...resourcesRef.current];
         try {
           await resourceService.updateResource(uid, resourceId, data);
-          toast.success("Resource updated");
+          toast.success("Resource updated", { id: "resource-updated" });
         } catch (err) {
           resourcesRef.current = prevSnapshot;
           setResources(prevSnapshot);
           setError(err instanceof Error ? err.message : "Failed to update resource");
-          toast.error("Failed to update resource");
+          toast.error("Failed to update resource", { id: "resource-update-error" });
         }
       }
     },
@@ -157,12 +157,13 @@ export const useResources = (uid?: string | null, trackId?: TrackId) => {
           resourcesRef.current = prevSnapshot;
           setResources(prevSnapshot);
           setError(err instanceof Error ? err.message : "Failed to delete resource");
-          toast.error("Failed to delete resource");
+          toast.error("Failed to delete resource", { id: "resource-delete-error" });
           return;
         }
       }
 
       toast("Resource deleted", {
+        id: "resource-deleted",
         action: {
           label: "Undo",
           onClick: async () => {
@@ -171,12 +172,61 @@ export const useResources = (uid?: string | null, trackId?: TrackId) => {
             if (uid && deleted && deletedFromFirebase) {
               try {
                 await resourceService.addResource(uid, deleted);
-              } catch {}
+              } catch {
+                toast.error("Undo failed — resource could not be restored", { id: "resource-undo-error" });
+              }
             }
           },
         },
         duration: 5000,
       });
+    },
+    [uid]
+  );
+
+  const archiveResource = useCallback(
+    async (resourceId: string) => {
+      const prevSnapshot = [...resourcesRef.current];
+      const optimistic = prevSnapshot.map((r) =>
+        r.id === resourceId ? { ...r, archivedAt: Date.now(), updatedAt: Date.now() } : r
+      );
+      resourcesRef.current = optimistic;
+      setResources(optimistic);
+      if (uid && !resourceId.startsWith("sample-")) {
+        try {
+          await resourceService.archiveResource(uid, resourceId);
+          toast.success("Resource archived", { id: "resource-archived" });
+        } catch {
+          resourcesRef.current = prevSnapshot;
+          setResources(prevSnapshot);
+          toast.error("Failed to archive resource", { id: "resource-archive-error" });
+        }
+      }
+    },
+    [uid]
+  );
+
+  const restoreResource = useCallback(
+    async (resourceId: string) => {
+      const prevSnapshot = [...resourcesRef.current];
+      const optimistic = prevSnapshot.map((r) => {
+        if (r.id !== resourceId) return r;
+        const copy = { ...r };
+        delete (copy as Record<string, unknown>).archivedAt;
+        return { ...copy, updatedAt: Date.now() };
+      });
+      resourcesRef.current = optimistic;
+      setResources(optimistic);
+      if (uid && !resourceId.startsWith("sample-")) {
+        try {
+          await resourceService.restoreResource(uid, resourceId);
+          toast.success("Resource restored", { id: "resource-restored" });
+        } catch {
+          resourcesRef.current = prevSnapshot;
+          setResources(prevSnapshot);
+          toast.error("Failed to restore resource", { id: "resource-restore-error" });
+        }
+      }
     },
     [uid]
   );
@@ -189,7 +239,9 @@ export const useResources = (uid?: string | null, trackId?: TrackId) => {
       addResource,
       updateResource,
       deleteResource,
+      archiveResource,
+      restoreResource,
     }),
-    [resources, loading, error, addResource, updateResource, deleteResource]
+    [resources, loading, error, addResource, updateResource, deleteResource, archiveResource, restoreResource]
   );
 };

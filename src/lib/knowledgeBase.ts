@@ -55,6 +55,7 @@ export interface KnowledgeResource {
   resourceLinks: ResourceLink[];
   askedAt: string;
   notes: string;
+  archivedAt?: number;
   createdAt: number;
   updatedAt: number;
 }

@@ -5,6 +5,7 @@ import {
   deleteDoc,
   serverTimestamp,
   setDoc,
+  updateDoc,
   query,
   where,
   onSnapshot,
@@ -83,9 +84,21 @@ export const updateResource = async (
   );
 };
 
+export const archiveResource = async (uid: string, resourceId: string): Promise<void> => {
+  await updateDoc(resourceDoc(uid, resourceId), { archivedAt: Date.now(), updatedAt: Date.now() });
+};
+
+export const restoreResource = async (uid: string, resourceId: string): Promise<void> => {
+  await updateDoc(resourceDoc(uid, resourceId), { archivedAt: null, updatedAt: Date.now() });
+};
+
 export const deleteResource = async (uid: string, resourceId: string): Promise<void> => {
   await deleteDoc(resourceDoc(uid, resourceId));
-  await deleteDoc(resourceProgressDoc(uid, resourceId)).catch(() => {});
+  try {
+    await deleteDoc(resourceProgressDoc(uid, resourceId));
+  } catch {
+    console.warn("Resource progress doc could not be deleted — possible orphan:", resourceId);
+  }
 };
 
 export const deleteResourcesByTrack = async (uid: string, trackId: string): Promise<void> => {

@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { toast } from "sonner";
 import { Timestamp } from "firebase/firestore";
 import type { Problem, ProgressMap, UserProblemProgress } from "@/lib/progressTypes";
 import {
@@ -118,6 +119,7 @@ export const useProblemProgress = (uid?: string | null) => {
 
         progressMapRef.current = revertedProgress;
         setProgressMap(revertedProgress);
+        toast.error("Failed to save progress", { id: "progress-save-error" });
         setError(
           progressError instanceof Error
             ? progressError.message

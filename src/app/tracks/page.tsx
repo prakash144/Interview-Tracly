@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useCallback } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { Plus, ChevronLeft, Settings2, BookOpen, Search, RotateCcw, ArrowUpDown, ChevronDown, Archive, Heart, Sparkles, Target, CheckCircle2, Clock3, BookMarked, MessageSquareText, Timer } from "lucide-react";
 import AppShell from "@/components/layout/AppShell";
 import Footer from "@/app/components/Footer";
@@ -55,6 +55,8 @@ const TrackDetailView = ({
   const [showRevisionOnly, setShowRevisionOnly] = useState(false);
   const [sortField, setSortField] = useState<SortField>("askedAt");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
+  const PAGE_SIZE = 20;
+  const [resourcePage, setResourcePage] = useState(0);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingResource, setEditingResource] = useState<KnowledgeResource | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
@@ -115,7 +117,18 @@ const TrackDetailView = ({
   }, [resources, searchTerm, difficultyFilter, companyFilter, statusFilter, showRevisionOnly, sortField, sortDir, progressMap]);
 
   const hasActiveFilters = Boolean(searchTerm || difficultyFilter || companyFilter || statusFilter || showRevisionOnly);
-  const resetFilters = () => { setSearchTerm(""); setDifficultyFilter(""); setCompanyFilter(""); setStatusFilter(""); setShowRevisionOnly(false); };
+
+  const paginatedResources = useMemo(() => {
+    return filteredResources.slice(resourcePage * PAGE_SIZE, (resourcePage + 1) * PAGE_SIZE);
+  }, [filteredResources, resourcePage]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredResources.length / PAGE_SIZE));
+
+  useEffect(() => {
+    setResourcePage(0);
+  }, [searchTerm, difficultyFilter, companyFilter, statusFilter, showRevisionOnly, sortField, sortDir]);
+
+  const resetFilters = () => { setSearchTerm(""); setDifficultyFilter(""); setCompanyFilter(""); setStatusFilter(""); setShowRevisionOnly(false); setResourcePage(0); };
   const toggleSort = (field: SortField) => {
     if (sortField === field) setSortDir(sortDir === "asc" ? "desc" : "asc");
     else { setSortField(field); setSortDir("desc"); }
@@ -126,6 +139,16 @@ const TrackDetailView = ({
     resources.forEach((r) => r.tags.forEach((t) => { counts[t] = (counts[t] || 0) + 1; }));
     return counts;
   }, [resources]);
+
+  const completedCount = useMemo(
+    () => resources.filter((r) => progressMap[r.id]?.status === "completed").length,
+    [resources, progressMap]
+  );
+
+  const revisionCount = useMemo(
+    () => resources.filter((r) => progressMap[r.id]?.inRevisionList).length,
+    [resources, progressMap]
+  );
 
   const companiesUsed = useMemo(() => {
     const set = new Set(resources.map((r) => r.company));
@@ -237,9 +260,9 @@ const TrackDetailView = ({
           {resources.length > 0 && (
             <>
               <span className="w-px h-3 bg-border" />
-              <span>{resources.filter((r) => progressMap[r.id]?.status === "completed").length} completed</span>
+              <span>{completedCount} completed</span>
               <span className="w-px h-3 bg-border" />
-              <span>{resources.filter((r) => progressMap[r.id]?.inRevisionList).length} in revision</span>
+              <span>{revisionCount} in revision</span>
               <span className="w-px h-3 bg-border" />
               <span>{Object.keys(tagCounts).length} unique tags</span>
             </>
@@ -248,11 +271,24 @@ const TrackDetailView = ({
 
         <div className="mt-1">
           {filteredResources.length > 0 ? (
-            <div className="grid gap-3 sm:grid-cols-2">
-              {filteredResources.map((resource) => (
-                <ResourceCard key={resource.id} resource={resource} progress={progressMap[resource.id]} progressEnabled={Boolean(auth.user)} onRequireAuth={auth.login} onStatusChange={setStatus} onToggleFavorite={toggleFavorite} onToggleRevision={toggleRevision} onSaveNotes={savePersonalNotes} onEdit={handleEdit} onDelete={handleDeleteRequest} />
-              ))}
-            </div>
+            <>
+              <div className="grid gap-3 sm:grid-cols-2">
+                {paginatedResources.map((resource) => (
+                  <ResourceCard key={resource.id} resource={resource} progress={progressMap[resource.id]} progressEnabled={Boolean(auth.user)} onRequireAuth={auth.login} onStatusChange={setStatus} onToggleFavorite={toggleFavorite} onToggleRevision={toggleRevision} onSaveNotes={savePersonalNotes} onEdit={handleEdit} onDelete={handleDeleteRequest} />
+                ))}
+              </div>
+              {filteredResources.length > PAGE_SIZE && (
+                <div className="flex items-center justify-between mt-4 text-xs">
+                  <span className="text-muted-foreground">
+                    Showing {resourcePage * PAGE_SIZE + 1}–{Math.min((resourcePage + 1) * PAGE_SIZE, filteredResources.length)} of {filteredResources.length}
+                  </span>
+                  <div className="flex gap-2">
+                    <Button variant="outline" size="sm" className="h-7 text-xs" disabled={resourcePage === 0} onClick={() => setResourcePage((p) => Math.max(0, p - 1))}>Previous</Button>
+                    <Button variant="outline" size="sm" className="h-7 text-xs" disabled={resourcePage >= totalPages - 1} onClick={() => setResourcePage((p) => p + 1)}>Next</Button>
+                  </div>
+                </div>
+              )}
+            </>
           ) : (
             <div className="rounded-xl border border-dashed border-border bg-card/70 px-4 py-16 text-center">
               <BookOpen className="mx-auto size-10 text-muted-foreground/30 mb-3" />
@@ -281,9 +317,11 @@ const TrackDetailView = ({
 
 const TracksPage = () => {
   const auth = useAuth();
-  const { tracks, loading, addTrack, updateTrack, deleteTrack, archiveTrack, mergeTracks } = useTracks(auth.user?.uid);
-  const { resources } = useResources(auth.user?.uid);
+  const { tracks, loading: tracksLoading, error: tracksError, addTrack, updateTrack, deleteTrack, archiveTrack, mergeTracks } = useTracks(auth.user?.uid);
+  const { resources, loading: resourcesLoading, error: resourcesError } = useResources(auth.user?.uid);
   const { progressMap, setStatus, toggleRevision, toggleFavorite, savePersonalNotes } = useResourceProgress(auth.user?.uid);
+  const loading = tracksLoading || resourcesLoading;
+  const hasError = tracksError || resourcesError;
   const [selectedTrackId, setSelectedTrackId] = useState<string | null>(null);
   const [activeSpecialView, setActiveSpecialView] = useState<"cheatsheets" | "behavioral" | "systemdesign" | "mocktest" | null>(null);
   const [showArchived, setShowArchived] = useState(false);
@@ -440,6 +478,13 @@ const TracksPage = () => {
       <div className="mx-auto max-w-7xl p-4 sm:px-6 lg:px-8 pb-10 animate-in fade-in slide-in-from-bottom-2 duration-500">
         {loading && <TracksSkeleton />}
 
+        {hasError && !loading && (
+          <div className="rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-8 text-center mb-5">
+            <p className="text-sm text-destructive">Failed to load tracks. Please try again.</p>
+          </div>
+        )}
+
+        {!hasError && !loading && (<>
         <section className="mb-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           {[
             { label: "Active tracks", value: overviewStats.activeTracks, icon: Target, tone: "text-info bg-info/10 border-info/20" },
@@ -461,7 +506,6 @@ const TracksPage = () => {
           ))}
         </section>
 
-        {/* Favorites Section */}
         {favoriteResources.length > 0 && (
           <section className="mb-7 overflow-hidden rounded-lg border border-rose-500/20 bg-card/90 shadow-sm backdrop-blur">
             <div className="flex flex-wrap items-center gap-2 border-b border-border/70 bg-gradient-to-r from-rose-500/10 via-card/60 to-amber-500/10 px-4 py-3">
@@ -600,6 +644,7 @@ const TracksPage = () => {
             <p className="text-xs text-muted-foreground/50 mt-1">Tracks you archive will appear here</p>
           </div>
         )}
+        </>)}
       </div>
 
       <ManageTracksDialog

@@ -55,7 +55,7 @@ export function loadCodingPrefs(): CodingPrefs {
 
 export function saveCodingPrefs(prefs: CodingPrefs) {
   if (typeof window === "undefined") return;
-  try { localStorage.setItem(PREFS_KEY, JSON.stringify(prefs)); } catch { console.warn("Failed to save coding prefs"); }
+  try { localStorage.setItem(PREFS_KEY, JSON.stringify(prefs)); } catch { /* localStorage unavailable */ }
 }
 
 export function mapSortingToState(sorting: string): { sortBy: "frequency" | "acceptanceRate" | null; sortDirection: "asc" | "desc" } {

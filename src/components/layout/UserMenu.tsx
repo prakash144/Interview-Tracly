@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import type { User } from "firebase/auth";
-import { FolderKanban, LogIn, LogOut, Settings, User as UserIcon } from "lucide-react";
+import { FolderKanban, LogIn, LogOut, Settings, User as UserIcon, Archive } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import {
@@ -113,6 +113,12 @@ const UserMenu = ({
           <Link href="/collections" className="flex items-center gap-3">
             <FolderKanban className="size-4" />
             Collections
+          </Link>
+        </DropdownMenuItem>
+        <DropdownMenuItem asChild className="cursor-pointer hover:bg-accent">
+          <Link href="/archive" className="flex items-center gap-3">
+            <Archive className="size-4" />
+            Archive
           </Link>
         </DropdownMenuItem>
         <DropdownMenuItem asChild className="cursor-pointer hover:bg-accent">
