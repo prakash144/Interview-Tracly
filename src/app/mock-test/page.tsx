@@ -3,6 +3,7 @@
 import { useState, useMemo, useEffect, useCallback, useRef } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import Footer from "@/app/components/Footer";
 import AppShell from "@/components/layout/AppShell";
 import PageHeader from "@/components/layout/PageHeader";
@@ -12,6 +13,7 @@ import type { MockInterviewConfig, MockTestResult, MockTestProblemResult } from 
 import MockTestConfig from "@/app/components/mock-test/MockTestConfig";
 import MockTestActive from "@/app/components/mock-test/MockTestActive";
 import MockTestSummary from "@/app/components/mock-test/MockTestSummary";
+import { Timer, Play, Clock, Lightbulb, ChevronRight } from "lucide-react";
 
 const ACTIVE_SESSION_KEY = "mock-test-active-session";
 
@@ -42,7 +44,7 @@ function clearActiveSession() {
   try { localStorage.removeItem(ACTIVE_SESSION_KEY); } catch {}
 }
 
-type Phase = "config" | "active" | "summary";
+type Phase = "dashboard" | "active" | "summary";
 
 function buildDefaultConfig(): MockInterviewConfig {
   return {
@@ -65,13 +67,20 @@ function buildDefaultConfig(): MockInterviewConfig {
   };
 }
 
+function formatTime(seconds: number): string {
+  const m = Math.floor(seconds / 60);
+  const s = seconds % 60;
+  return `${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`;
+}
+
 export default function MockTestPage() {
   const { questionsState, unifiedProblems } = useProblemWorkspaceData();
   const allQuestions = questionsState.questions.length > 0 ? questionsState.questions : unifiedProblems;
   const isLoading = questionsState.loading;
   const hasError = Boolean(questionsState.error);
 
-  const [phase, setPhase] = useState<Phase>("config");
+  const [phase, setPhase] = useState<Phase>("dashboard");
+  const [showConfigDialog, setShowConfigDialog] = useState(false);
   const [config, setConfig] = useState<MockInterviewConfig>(buildDefaultConfig);
   const [testProblems, setTestProblems] = useState<MockTestProblemResult[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -171,6 +180,7 @@ export default function MockTestPage() {
     }
 
     const now = Date.now();
+    setShowConfigDialog(false);
     setTestProblems(allProblems);
     setCurrentIndex(0);
     setTimeLeft(config.durationMinutes * 60);
@@ -322,7 +332,11 @@ export default function MockTestPage() {
 
   const handleNewTest = useCallback(() => {
     setConfig(buildDefaultConfig());
-    setPhase("config");
+    setPhase("dashboard");
+  }, []);
+
+  const openNewTest = useCallback(() => {
+    setShowConfigDialog(true);
   }, []);
 
   const reviewResult = useCallback((result: MockTestResult) => {
@@ -352,12 +366,21 @@ export default function MockTestPage() {
     setPendingSession(null);
   }, []);
 
+  const totalTests = history.length;
+  const totalSolved = history.reduce((sum, r) => sum + r.problems.filter((p) => p.solved && !p.partiallySolved).length, 0);
+  const totalProblems = history.reduce((sum, r) => sum + r.problems.length, 0);
+  const avgAccuracy = totalProblems > 0 ? Math.round((totalSolved / totalProblems) * 100) : 0;
+  const bestScore = history.length > 0
+    ? Math.max(...history.map((r) => {
+        const s = r.problems.filter((p) => p.solved && !p.partiallySolved).length;
+        return r.problems.length > 0 ? Math.round((s / r.problems.length) * 100) : 0;
+      }))
+    : 0;
+
   if (phase === "active") {
     return (
       <AppShell footer={<Footer />}>
-        <div className="sr-only">
-          <h1>Mock Test — Active</h1>
-        </div>
+        <div className="sr-only"><h1>Mock Test — Active</h1></div>
         <MockTestActive
           config={config}
           sections={config.sections}
@@ -386,84 +409,139 @@ export default function MockTestPage() {
 
   return (
     <AppShell footer={<Footer />}>
+      <PageHeader
+        eyebrow="Mock Interview"
+        title="Mock Interview Dashboard"
+        description="Simulate real interview pressure with timed mock tests across multiple disciplines."
+      />
+
       {showResumePrompt && pendingSession && (
-        <div className="mx-auto max-w-3xl px-4 pt-4">
-          <div className="rounded-xl border border-border bg-card p-4 flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium">Unfinished Interview</p>
-              <p className="text-xs text-muted-foreground mt-0.5">
-                {pendingSession.problems.length} question{pendingSession.problems.length !== 1 ? "s" : ""} ·{" "}
-                {formatTime(pendingSession.timeLeft)} remaining
-              </p>
+        <div className="mx-auto max-w-4xl px-4 pt-2 pb-0">
+          <div className="rounded-xl border border-primary/30 bg-primary/5 p-4 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <Timer className="size-5 text-primary" />
+              <div>
+                <p className="text-sm font-medium">Unfinished Interview</p>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  {pendingSession.problems.length} question{pendingSession.problems.length !== 1 ? "s" : ""} ·{" "}
+                  {formatTime(pendingSession.timeLeft)} remaining
+                </p>
+              </div>
             </div>
             <div className="flex gap-2">
-              <Button onClick={discardSession} variant="outline" size="sm" className="h-8 text-xs">
-                Discard
-              </Button>
-              <Button onClick={resumeSession} size="sm" className="h-8 text-xs">
-                Resume
-              </Button>
+              <Button onClick={discardSession} variant="outline" size="sm" className="h-8 text-xs">Discard</Button>
+              <Button onClick={resumeSession} size="sm" className="h-8 text-xs">Resume</Button>
             </div>
           </div>
         </div>
       )}
-      <PageHeader
-        eyebrow="Mock Interview"
-        title="Timed Mock Interview"
-        description="Configure your interview, add sections, and simulate real interview pressure."
-      />
-      <MockTestConfig
-        config={config}
-        onChange={setConfig}
-        onStart={startTest}
-        availableTopics={availableTopics}
-        companies={companies}
-        isLoading={isLoading}
-        hasQuestions={allQuestions.length > 0}
-        hasNoMatch={false}
-        hasError={hasError}
-      />
-      {history.length > 0 && (
-        <div className="mx-auto max-w-3xl px-4 pb-10">
-          <div className="rounded-xl border border-border bg-card p-4">
-            <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">
-              Past Interviews
-            </h3>
-            <div className="space-y-1.5 max-h-48 overflow-y-auto">
+
+      <div className="mx-auto max-w-4xl px-4 pb-10 space-y-6">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <div className="rounded-xl border border-border bg-card p-4 text-center">
+            <p className="text-2xl font-bold tabular-nums">{totalTests}</p>
+            <p className="text-xs text-muted-foreground mt-1">Tests Taken</p>
+          </div>
+          <div className="rounded-xl border border-border bg-card p-4 text-center">
+            <p className="text-2xl font-bold text-success tabular-nums">{totalSolved}</p>
+            <p className="text-xs text-muted-foreground mt-1">Solved</p>
+          </div>
+          <div className="rounded-xl border border-border bg-card p-4 text-center">
+            <p className="text-2xl font-bold text-info tabular-nums">{avgAccuracy}%</p>
+            <p className="text-xs text-muted-foreground mt-1">Avg Accuracy</p>
+          </div>
+          <div className="rounded-xl border border-border bg-card p-4 text-center">
+            <p className="text-2xl font-bold text-warning tabular-nums">{bestScore}%</p>
+            <p className="text-xs text-muted-foreground mt-1">Best Score</p>
+          </div>
+        </div>
+
+        <div className="flex gap-3">
+          <Button onClick={openNewTest} className="flex-1 h-11 text-sm">
+            <Play className="size-4 mr-1.5" /> New Mock Interview
+          </Button>
+        </div>
+
+        {history.length > 0 && (
+          <div>
+            <div className="flex items-center gap-2 mb-3">
+              <Clock className="size-4 text-muted-foreground" />
+              <h3 className="text-sm font-semibold">Recent Results</h3>
+              <span className="text-xs text-muted-foreground/50 ml-auto">{history.length} total</span>
+            </div>
+            <div className="space-y-1.5">
               {history.slice(0, 10).map((r) => {
                 const s = r.problems.filter((p) => p.solved && !p.partiallySolved).length;
                 const p = r.problems.filter((p) => p.partiallySolved).length;
+                const h = r.problems.filter((pp) => pp.usedHint).length;
+                const score = r.problems.length > 0 ? Math.round((s / r.problems.length) * 100) : 0;
                 return (
                   <button
                     key={r.id}
                     onClick={() => reviewResult(r)}
-                    className="flex items-center gap-3 text-xs py-1.5 w-full text-left cursor-pointer hover:bg-accent/40 rounded px-1 transition-colors"
+                    className="flex items-center gap-3 w-full text-left rounded-lg border border-border bg-card px-4 py-3 hover:bg-accent/40 transition-colors cursor-pointer"
                   >
-                    <span className="text-muted-foreground tabular-nums shrink-0">
-                      {new Date(r.startedAt).toLocaleDateString()}
+                    <div className="flex items-center gap-2 shrink-0 w-20">
+                      <div className={`size-2 rounded-full ${score >= 80 ? "bg-success" : score >= 50 ? "bg-warning" : "bg-destructive"}`} />
+                      <span className="text-xs tabular-nums font-medium">{new Date(r.startedAt).toLocaleDateString(undefined, { month: "short", day: "numeric" })}</span>
+                    </div>
+                    <div className="flex items-center gap-3 text-sm flex-1 min-w-0">
+                      <span className="font-semibold tabular-nums">{s}/{r.problems.length}</span>
+                      {p > 0 && <span className="text-xs text-warning">(+{p})</span>}
+                      {h > 0 && <Lightbulb className="size-3 text-warning shrink-0" />}
+                    </div>
+                    <span className="text-xs text-muted-foreground tabular-nums shrink-0">{formatTime(r.totalTimeSeconds)}</span>
+                    <span className="text-xs text-muted-foreground/50 hidden sm:block shrink-0">
+                      {r.config.durationMinutes}m{r.config.company && ` · ${r.config.company}`}
                     </span>
-                    <span className="text-success font-medium">
-                      {s}/{r.problems.length}
-                      {p > 0 && <span className="text-warning ml-1">(+{p})</span>}
-                    </span>
-                    <span className="text-muted-foreground">{formatTime(r.totalTimeSeconds)}</span>
-                    <span className="text-muted-foreground/50">
-                      {r.config.durationMinutes}m{r.config.sections.length > 1 ? ` · ${r.config.sections.length} sections` : ""}
-                      {r.config.company && ` · ${r.config.company}`}
-                    </span>
+                    <ChevronRight className="size-3.5 text-muted-foreground/30 shrink-0" />
                   </button>
                 );
               })}
+              {history.length > 10 && (
+                <p className="text-xs text-center text-muted-foreground/50 pt-1">
+                  +{history.length - 10} more tests
+                </p>
+              )}
             </div>
           </div>
-        </div>
-      )}
+        )}
+
+        {history.length === 0 && (
+          <div className="rounded-xl border border-dashed border-border bg-card/60 p-12 text-center space-y-3">
+            <Timer className="mx-auto size-10 text-muted-foreground/30" />
+            <p className="text-sm font-medium text-foreground">No tests yet</p>
+            <p className="text-xs text-muted-foreground max-w-sm mx-auto">
+              Start your first mock interview to simulate real interview conditions and track your performance over time.
+            </p>
+            <Button onClick={openNewTest} size="sm" className="mt-2">
+              <Play className="size-3.5 mr-1.5" /> Start First Test
+            </Button>
+          </div>
+        )}
+      </div>
+
+      <Dialog open={showConfigDialog} onOpenChange={setShowConfigDialog}>
+        <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>New Mock Interview</DialogTitle>
+            <DialogDescription>
+              Configure your interview sections and settings to match your target role.
+            </DialogDescription>
+          </DialogHeader>
+          <MockTestConfig
+            config={config}
+            onChange={setConfig}
+            onStart={startTest}
+            availableTopics={availableTopics}
+            companies={companies}
+            isLoading={isLoading}
+            hasQuestions={allQuestions.length > 0}
+            hasNoMatch={false}
+            hasError={hasError}
+          />
+        </DialogContent>
+      </Dialog>
     </AppShell>
   );
-}
-
-function formatTime(seconds: number): string {
-  const m = Math.floor(seconds / 60);
-  const s = seconds % 60;
-  return `${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`;
 }

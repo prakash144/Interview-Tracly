@@ -1,6 +1,7 @@
 "use client";
 
-import { type LucideIcon, Code, Layers, Server, Users, Crown, Brain, Settings2, X, Play } from "lucide-react";
+import { useState, useMemo } from "react";
+import { type LucideIcon, Code, Layers, Server, Users, Crown, Brain, Settings2, X, Play, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import type { MockInterviewConfig, MockSection, MockInterviewType } from "@/lib/mockTest";
@@ -75,8 +76,16 @@ export default function MockTestConfig({
     });
   };
 
+  const [topicSearch, setTopicSearch] = useState("");
+
+  const filteredTopics = useMemo(() => {
+    if (!topicSearch) return availableTopics;
+    const q = topicSearch.toLowerCase();
+    return availableTopics.filter((t) => t.toLowerCase().includes(q));
+  }, [availableTopics, topicSearch]);
+
   return (
-    <div className="mx-auto max-w-3xl px-4 pb-10 space-y-6">
+    <div className="space-y-5">
       {isLoading && (
         <div className="rounded-xl border border-border bg-card p-8 text-center space-y-3">
           <div className="mx-auto size-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
@@ -279,10 +288,23 @@ export default function MockTestConfig({
                     </div>
 
                     {section.type === "dsa" && (
-                      <div className="space-y-1">
+                      <div className="space-y-1.5">
                         <label className="text-[10px] text-muted-foreground">Topics</label>
-                        <div className="flex flex-wrap gap-1 max-h-20 overflow-y-auto">
-                          {availableTopics.map((t) => (
+                        <div className="relative">
+                          <Search className="pointer-events-none absolute left-2 top-1/2 size-3 -translate-y-1/2 text-muted-foreground" />
+                          <input
+                            type="text"
+                            value={topicSearch}
+                            onChange={(e) => setTopicSearch(e.target.value)}
+                            placeholder="Search topics..."
+                            className="w-full h-7 pl-6 pr-2 text-[10px] rounded-md border border-border bg-secondary text-foreground outline-none placeholder:text-muted-foreground/40"
+                          />
+                        </div>
+                        <div className="flex flex-wrap gap-1 max-h-32 overflow-y-auto border border-border/50 rounded-md p-2 bg-secondary/20">
+                          {filteredTopics.length === 0 && (
+                            <span className="text-[10px] text-muted-foreground/50 px-1">No topics match</span>
+                          )}
+                          {filteredTopics.map((t) => (
                             <button
                               key={t}
                               onClick={() =>
@@ -292,10 +314,10 @@ export default function MockTestConfig({
                                     : [...section.topics, t],
                                 })
                               }
-                              className={`text-[10px] px-1.5 py-0.5 rounded-full border transition-colors ${
+                              className={`text-[10px] px-2 py-0.5 rounded-full border transition-colors ${
                                 section.topics.includes(t)
                                   ? "bg-primary text-primary-foreground border-primary"
-                                  : "border-border hover:bg-accent"
+                                  : "border-border hover:bg-accent text-muted-foreground"
                               }`}
                             >
                               {t}

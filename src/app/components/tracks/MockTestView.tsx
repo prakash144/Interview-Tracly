@@ -61,16 +61,16 @@ export default function MockTestView({ onBack }: { onBack: () => void }) {
               const r2 = computeSummary(r);
               const h = r.problems.filter((p) => p.usedHint).length;
               return (
-                <div key={r.id} className="flex items-center gap-3 rounded-md bg-gray-800/30 px-3 py-2 text-xs">
+                <button key={r.id} onClick={() => window.location.href = "/mock-test"} className="flex items-center gap-3 rounded-md bg-gray-800/30 px-3 py-2 text-xs w-full text-left cursor-pointer hover:bg-gray-800/50 transition-colors">
                   <span className="text-muted-foreground tabular-nums shrink-0 w-16">{new Date(r.startedAt).toLocaleDateString()}</span>
                   <span className="text-success font-medium">{r2.solved}/{r.problems.length}</span>
                   {r2.unsolved > 0 && <span className="text-muted-foreground flex items-center gap-0.5"><SkipForward className="size-3" />{r2.unsolved}</span>}
                   {h > 0 && <span className="text-warning flex items-center gap-0.5"><Lightbulb className="size-3" />{h}</span>}
                   <span className="text-muted-foreground ml-auto tabular-nums">{formatTime(r.totalTimeSeconds)}</span>
-                </div>
-              );
-            })}
-          </div>
+                  </button>
+                );
+              })}
+            </div>
         </div>
       )}
 
