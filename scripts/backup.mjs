@@ -1,6 +1,7 @@
-import admin from "firebase-admin";
+import { initializeApp, cert, getApps } from "firebase-admin/app";
+import { getFirestore } from "firebase-admin/firestore";
 import { google } from "googleapis";
-import { readFileSync, writeFileSync, existsSync } from "fs";
+import { createReadStream, readFileSync, writeFileSync, existsSync } from "fs";
 import { resolve } from "path";
 
 const SERVICE_ACCOUNT_PATH = resolve(process.cwd(), "service-account.json");
@@ -18,8 +19,8 @@ if (!existsSync(SERVICE_ACCOUNT_PATH)) {
 }
 
 const sa = JSON.parse(readFileSync(SERVICE_ACCOUNT_PATH, "utf-8"));
-admin.initializeApp({ credential: admin.credential.cert(sa) });
-const db = admin.firestore();
+const app = getApps().length === 0 ? initializeApp({ credential: cert(sa) }) : getApps()[0];
+const db = getFirestore(app);
 
 const USER_COLLECTIONS = [
   "tracks",
@@ -87,7 +88,7 @@ async function uploadToDrive(filePath, fileName) {
     },
     media: {
       mimeType: "application/json",
-      body: readFileSync(filePath),
+      body: createReadStream(filePath),
     },
   });
 
