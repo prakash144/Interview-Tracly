@@ -231,9 +231,14 @@ export const useResources = (uid?: string | null, trackId?: TrackId) => {
     [uid]
   );
 
+  const scopedResources = useMemo(
+    () => trackId ? resources.filter((r) => r.track === trackId) : resources,
+    [resources, trackId]
+  );
+
   return useMemo(
     () => ({
-      resources,
+      resources: scopedResources,
       loading,
       error,
       addResource,
@@ -242,6 +247,6 @@ export const useResources = (uid?: string | null, trackId?: TrackId) => {
       archiveResource,
       restoreResource,
     }),
-    [resources, loading, error, addResource, updateResource, deleteResource, archiveResource, restoreResource]
+    [scopedResources, loading, error, addResource, updateResource, deleteResource, archiveResource, restoreResource]
   );
 };
