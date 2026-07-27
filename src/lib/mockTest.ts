@@ -30,6 +30,7 @@ export interface MockSection {
   difficulties: ("Easy" | "Medium" | "Hard")[];
   topics: string[];
   tags: string[];
+  customQuestions?: string[];
 }
 
 export interface MockInterviewConfig {
@@ -53,6 +54,7 @@ export interface MockTestProblemResult {
   partiallySolved: boolean;
   sectionId: string;
   sectionType: MockInterviewType;
+  questionText?: string;
 }
 
 export interface MockSectionResult {
@@ -119,6 +121,7 @@ function migrateOldProblems(problems: Record<string, unknown>[]): MockTestProble
     partiallySolved: Boolean(p.partiallySolved ?? false),
     sectionId: String(p.sectionId ?? "legacy"),
     sectionType: "dsa" as MockInterviewType,
+    questionText: p.questionText ? String(p.questionText) : undefined,
   }));
 }
 
@@ -156,6 +159,7 @@ function migrateResult(raw: Record<string, unknown>): MockTestResult {
         difficulties: (s.difficulties as ("Easy" | "Medium" | "Hard")[]) ?? ["Easy", "Medium"],
         topics: (s.topics as string[]) ?? [],
         tags: (s.tags as string[]) ?? [],
+        customQuestions: s.customQuestions ? (s.customQuestions as string[]) : [],
       })),
       company: String(config.company ?? ""),
       role: String(config.role ?? ""),

@@ -3,18 +3,23 @@
 import { useState, useMemo, useEffect, useCallback, useRef } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import Footer from "@/app/components/Footer";
 import AppShell from "@/components/layout/AppShell";
 import PageHeader from "@/components/layout/PageHeader";
 import { useProblemWorkspaceData } from "@/features/problems/hooks/useProblemWorkspaceData";
-import { loadHistory, saveResult, generateTestId, MOCK_TYPE_LABELS, LEVELS, generateSectionId } from "@/lib/mockTest";
-import type { MockInterviewConfig, MockTestResult, MockTestProblemResult, MockSection, MockInterviewType } from "@/lib/mockTest";
+import { loadHistory, saveResult, generateTestId, generateSectionId } from "@/lib/mockTest";
+import type { MockInterviewConfig, MockTestResult, MockTestProblemResult } from "@/lib/mockTest";
+import { setDnd } from "@/lib/notifications/service";
 import MockTestActive from "@/app/components/mock-test/MockTestActive";
 import MockTestSummary from "@/app/components/mock-test/MockTestSummary";
-import { Timer, Play, Clock, Lightbulb, ChevronRight, ChevronLeft, Check, Code, Layers, Server, Users, Crown, Brain, Settings2, X, Search, ListOrdered } from "lucide-react";
+import WizardStepDetails from "@/app/components/mock-test/wizard/WizardStepDetails";
+import WizardStepSections from "@/app/components/mock-test/wizard/WizardStepSections";
+import WizardStepReview from "@/app/components/mock-test/wizard/WizardStepReview";
+import { Timer, Play, Clock, Lightbulb, ChevronRight, ChevronLeft, Check, ListOrdered, Layers } from "lucide-react";
 
 const ACTIVE_SESSION_KEY = "mock-test-active-session";
+
+type Phase = "dashboard" | "active" | "summary" | "review";
 
 interface ActiveMockSession {
   config: MockInterviewConfig;
@@ -25,6 +30,8 @@ interface ActiveMockSession {
   testStart: number;
   usedHint: boolean;
   hintsRemaining: number;
+  strictMode: boolean;
+  markedForReview: boolean[];
   savedAt: number;
 }
 
@@ -32,10 +39,30 @@ function saveActiveSession(session: ActiveMockSession) {
   try { localStorage.setItem(ACTIVE_SESSION_KEY, JSON.stringify(session)); } catch {}
 }
 
+function migrateSession(session: ActiveMockSession): ActiveMockSession {
+  return {
+    ...session,
+    config: {
+      ...session.config,
+      sections: session.config.sections.map((s) => ({
+        ...s,
+        customQuestions: s.customQuestions ?? [],
+      })),
+    },
+    problems: session.problems.map((p) => ({
+      ...p,
+      questionText: p.questionText || undefined,
+    })),
+  };
+}
+
 function loadActiveSession(): ActiveMockSession | null {
   try {
     const raw = localStorage.getItem(ACTIVE_SESSION_KEY);
-    return raw ? JSON.parse(raw) : null;
+    if (!raw) return null;
+    const session: ActiveMockSession = JSON.parse(raw);
+    const migrated = migrateSession(session);
+    return migrated;
   } catch { return null; }
 }
 
@@ -43,27 +70,11 @@ function clearActiveSession() {
   try { localStorage.removeItem(ACTIVE_SESSION_KEY); } catch {}
 }
 
-type Phase = "dashboard" | "active" | "summary";
 type WizardStep = 1 | 2 | 3;
-
-const TYPE_ICONS: Record<MockInterviewType, typeof Code> = {
-  dsa: Code, "system-design": Layers, backend: Server, behavioral: Users, leadership: Crown, "ai-ml": Brain, custom: Settings2,
-};
-
-const DURATIONS = [15, 30, 45, 60] as const;
-const DIFFICULTIES = ["Easy", "Medium", "Hard"] as const;
-const SECTION_PRESETS: { type: MockInterviewType; count: number; title: string }[] = [
-  { type: "dsa", count: 3, title: "Coding Problems" },
-  { type: "system-design", count: 1, title: "System Design" },
-  { type: "behavioral", count: 2, title: "Behavioral Questions" },
-  { type: "backend", count: 2, title: "Backend Deep Dive" },
-  { type: "leadership", count: 2, title: "Leadership Principles" },
-  { type: "ai-ml", count: 2, title: "AI/ML Questions" },
-];
 
 function buildDefaultConfig(): MockInterviewConfig {
   return {
-    sections: [{ id: generateSectionId(), type: "dsa", title: "Coding Problems", problemCount: 5, difficulties: ["Easy", "Medium"], topics: [], tags: [] }],
+    sections: [{ id: generateSectionId(), type: "dsa", title: "Coding Problems", problemCount: 5, difficulties: ["Easy", "Medium"], topics: [], tags: [], customQuestions: [] }],
     company: "", role: "", level: "", durationMinutes: 30, round: "",
   };
 }
@@ -87,6 +98,8 @@ export default function MockTestPage() {
   const [phase, setPhase] = useState<Phase>("dashboard");
   const [wizardStep, setWizardStep] = useState<WizardStep | null>(null);
   const [config, setConfig] = useState<MockInterviewConfig>(buildDefaultConfig);
+  const configRef = useRef(config);
+  configRef.current = config;
   const [testProblems, setTestProblems] = useState<MockTestProblemResult[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [timeLeft, setTimeLeft] = useState(0);
@@ -101,6 +114,8 @@ export default function MockTestPage() {
   const [showResumePrompt, setShowResumePrompt] = useState(false);
   const [pendingSession, setPendingSession] = useState<ActiveMockSession | null>(null);
   const [topicSearch, setTopicSearch] = useState<Record<string, string>>({});
+  const [strictMode, setStrictMode] = useState(false);
+  const [markedForReview, setMarkedForReview] = useState<boolean[]>([]);
   const topRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -131,15 +146,16 @@ export default function MockTestPage() {
   }, [allQuestions]);
 
   const startTest = useCallback(() => {
-    const dsaSections = config.sections.filter((s) => s.type === "dsa");
-    const nonDsaSections = config.sections.filter((s) => s.type !== "dsa");
+    const cfg = configRef.current;
+    const dsaSections = cfg.sections.filter((s) => s.type === "dsa");
+    const nonDsaSections = cfg.sections.filter((s) => s.type !== "dsa");
     const allProblems: MockTestProblemResult[] = [];
 
     dsaSections.forEach((section) => {
       const pool = allQuestions.filter((q) => {
         if (section.difficulties.length && !section.difficulties.some((d) => d.toUpperCase() === q.difficulty.toUpperCase())) return false;
         if (section.topics.length && !section.topics.some((t) => q.topicTag === t || q.topics?.includes(t))) return false;
-        if (config.company && q.company !== config.company) return false;
+        if (cfg.company && q.company !== cfg.company) return false;
         return true;
       });
       const shuffled = [...pool].sort(() => Math.random() - 0.5);
@@ -154,11 +170,14 @@ export default function MockTestPage() {
 
     nonDsaSections.forEach((section) => {
       for (let i = 0; i < section.problemCount; i++) {
+        const customQ = section.customQuestions?.[i];
         allProblems.push({
-          problemId: `${section.type}_${i + 1}`, title: `${section.title} — Question ${i + 1}`,
+          problemId: `${section.type}_${i + 1}`,
+          title: `${section.title} — Q${i + 1}`,
           difficulty: section.difficulties[0] || "Medium", topic: section.topics[0] || "",
           timeSpentSeconds: 0, usedHint: false, solved: false, skipped: false, partiallySolved: false,
           sectionId: section.id, sectionType: section.type,
+          questionText: customQ || undefined,
         });
       }
     });
@@ -172,14 +191,17 @@ export default function MockTestPage() {
     setWizardStep(null);
     setTestProblems(allProblems);
     setCurrentIndex(0);
-    setTimeLeft(config.durationMinutes * 60);
+    setTimeLeft(cfg.durationMinutes * 60);
     setElapsed(0);
     setUsedHint(false);
     setHintsRemaining(3);
     setTestStart(now);
+    setStrictMode(false);
+    setMarkedForReview(new Array(allProblems.length).fill(false));
     setPhase("active");
-    saveActiveSession({ config, problems: allProblems, currentIndex: 0, timeLeft: config.durationMinutes * 60, elapsed: 0, testStart: now, usedHint: false, hintsRemaining: 3, savedAt: now });
-  }, [allQuestions, config]);
+    setDnd(true);
+    saveActiveSession({ config: cfg, problems: allProblems, currentIndex: 0, timeLeft: cfg.durationMinutes * 60, elapsed: 0, testStart: now, usedHint: false, hintsRemaining: 3, strictMode: false, markedForReview: new Array(allProblems.length).fill(false), savedAt: now });
+  }, [allQuestions]);
 
   useEffect(() => {
     if (phase !== "active") { if (timerRef.current) clearInterval(timerRef.current); return; }
@@ -196,14 +218,16 @@ export default function MockTestPage() {
   timeLeftRef.current = timeLeft;
   const elapsedRef = useRef(elapsed);
   elapsedRef.current = elapsed;
+  const markedForReviewRef = useRef(markedForReview);
+  markedForReviewRef.current = markedForReview;
   const saveTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   useEffect(() => {
     if (phase !== "active") { if (saveTimerRef.current) clearInterval(saveTimerRef.current); return; }
     saveTimerRef.current = setInterval(() => {
-      saveActiveSession({ config, problems: testProblemsRef.current, currentIndex, timeLeft: timeLeftRef.current, elapsed: elapsedRef.current, testStart, usedHint, hintsRemaining, savedAt: Date.now() });
+      saveActiveSession({ config, problems: testProblemsRef.current, currentIndex, timeLeft: timeLeftRef.current, elapsed: elapsedRef.current, testStart, usedHint, hintsRemaining, strictMode, markedForReview: markedForReviewRef.current, savedAt: Date.now() });
     }, 5000);
     return () => { if (saveTimerRef.current) clearInterval(saveTimerRef.current); };
-  }, [phase, config, currentIndex, testStart, usedHint, hintsRemaining]);
+  }, [phase, config, currentIndex, testStart, usedHint, hintsRemaining, strictMode]);
 
   const recordCurrent = useCallback((overrides: Partial<MockTestProblemResult>) => {
     setTestProblems((prev) => {
@@ -229,16 +253,18 @@ export default function MockTestPage() {
   const finishTest = useCallback((completed: boolean) => {
     if (timerRef.current) clearInterval(timerRef.current);
     const now = Date.now();
-    const result: MockTestResult = { id: generateTestId(), config, startedAt: testStart, endedAt: now, totalTimeSeconds: Math.floor((now - testStart) / 1000), problems: testProblems.map((p) => ({ ...p, timeSpentSeconds: p.timeSpentSeconds || 10 })), completed };
+    const cfg = configRef.current;
+    const result: MockTestResult = { id: generateTestId(), config: cfg, startedAt: testStart, endedAt: now, totalTimeSeconds: Math.floor((now - testStart) / 1000), problems: testProblems.map((p) => ({ ...p, timeSpentSeconds: p.timeSpentSeconds || 10 })), completed };
     saveResult(result);
     clearActiveSession();
     setLastResult(result);
     setPhase("summary");
+    setDnd(false);
     setHistory(loadHistory());
-  }, [config, testStart, testProblems]);
+  }, [testStart, testProblems]);
   finishTestRef.current = finishTest;
 
-  const handleNewTest = useCallback(() => { setConfig(buildDefaultConfig()); setPhase("dashboard"); }, []);
+  const handleNewTest = useCallback(() => { clearActiveSession(); setConfig(buildDefaultConfig()); setPhase("dashboard"); }, []);
   const reviewResult = useCallback((result: MockTestResult) => { setLastResult(result); setPhase("summary"); }, []);
 
   const resumeSession = useCallback(() => {
@@ -252,32 +278,44 @@ export default function MockTestPage() {
     setTestStart(pendingSession.testStart);
     setUsedHint(pendingSession.usedHint);
     setHintsRemaining(pendingSession.hintsRemaining);
+    setStrictMode(pendingSession.strictMode ?? false);
+    setMarkedForReview(pendingSession.markedForReview ?? new Array(pendingSession.problems.length).fill(false));
     setShowResumePrompt(false);
     setPendingSession(null);
     setPhase("active");
   }, [pendingSession]);
 
-  const discardSession = useCallback(() => { clearActiveSession(); setShowResumePrompt(false); setPendingSession(null); }, []);
+  const discardSession = useCallback(() => { clearActiveSession(); setShowResumePrompt(false); setPendingSession(null); setDnd(false); }, []);
 
-  const addSection = (type: MockInterviewType) => {
-    const preset = SECTION_PRESETS.find((p) => p.type === type);
-    const section: MockSection = { id: generateSectionId(), type, title: preset?.title ?? MOCK_TYPE_LABELS[type], problemCount: preset?.count ?? 3, difficulties: ["Easy", "Medium"], topics: [], tags: [] };
-    setConfig((prev) => ({ ...prev, sections: [...prev.sections, section] }));
-  };
+  const navigateToQuestion = useCallback((index: number) => {
+    if (index >= 0 && index < testProblems.length) {
+      recordCurrent({});
+      setCurrentIndex(index);
+      setUsedHint(false);
+    }
+  }, [testProblems.length, recordCurrent]);
 
-  const removeSection = (id: string) => setConfig((prev) => ({ ...prev, sections: prev.sections.filter((s) => s.id !== id) }));
+  const toggleStrictMode = useCallback(() => setStrictMode((p) => !p), []);
 
-  const updateSection = (id: string, patch: Partial<MockSection>) => {
-    setConfig((prev) => ({ ...prev, sections: prev.sections.map((s) => (s.id === id ? { ...s, ...patch } : s)) }));
-  };
-
-  const totalQuestions = config.sections.reduce((s, sec) => s + sec.problemCount, 0);
+  const toggleMarkForReview = useCallback(() => {
+    setMarkedForReview((prev) => {
+      const next = [...prev];
+      next[currentIndex] = !next[currentIndex];
+      return next;
+    });
+  }, [currentIndex]);
 
   if (phase === "active") {
     return (
-      <AppShell footer={<Footer />}>
-        <div className="sr-only"><h1>Mock Test — Active</h1></div>
-        <MockTestActive config={config} sections={config.sections} problems={testProblems} currentIndex={currentIndex} timeLeft={timeLeft} usedHint={usedHint} hintsRemaining={hintsRemaining} onSolve={handleSolve} onPartialSolve={handlePartialSolve} onSkip={handleSkip} onHint={handleHint} onEnd={() => finishTest(false)} />
+      <AppShell>
+        <MockTestActive
+          config={config} sections={config.sections} problems={testProblems}
+          currentIndex={currentIndex} timeLeft={timeLeft} usedHint={usedHint} hintsRemaining={hintsRemaining}
+          strictMode={strictMode} markedForReview={markedForReview}
+          onSolve={handleSolve} onPartialSolve={handlePartialSolve} onSkip={handleSkip} onHint={handleHint}
+          onNavigate={navigateToQuestion} onToggleReview={toggleMarkForReview} onToggleStrictMode={toggleStrictMode}
+          onEnd={() => finishTest(false)} onBack={() => { setPhase("dashboard"); setDnd(false); }}
+        />
       </AppShell>
     );
   }
@@ -320,240 +358,34 @@ export default function MockTestPage() {
       </div>
 
       {wizardStep === 1 && (
-        <div className="rounded-xl border border-border bg-card p-6 space-y-6">
-          <div>
-            <h3 className="text-sm font-semibold">Interview Details</h3>
-            <p className="text-xs text-muted-foreground mt-1">Basic information about the role you&apos;re preparing for.</p>
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            <div className="space-y-1.5 sm:col-span-2 lg:col-span-1">
-              <label className="text-xs font-medium text-muted-foreground">Company</label>
-              <select value={config.company} onChange={(e) => setConfig((p) => ({ ...p, company: e.target.value }))} className="w-full rounded-lg border border-border bg-secondary px-3 py-2 text-sm text-foreground outline-none focus:ring-1 focus:ring-primary">
-                <option value="">Any Company</option>
-                {companies.map((c) => (<option key={c} value={c}>{c}</option>))}
-              </select>
-            </div>
-            <div className="space-y-1.5">
-              <label className="text-xs font-medium text-muted-foreground">Role</label>
-              <Input value={config.role} onChange={(e) => setConfig((p) => ({ ...p, role: e.target.value }))} placeholder="e.g. SDE II" className="h-10 text-sm" />
-            </div>
-            <div className="space-y-1.5">
-              <label className="text-xs font-medium text-muted-foreground">Level</label>
-              <select value={config.level} onChange={(e) => setConfig((p) => ({ ...p, level: e.target.value }))} className="w-full rounded-lg border border-border bg-secondary px-3 py-2 text-sm text-foreground outline-none focus:ring-1 focus:ring-primary">
-                <option value="">Any Level</option>
-                {LEVELS.map((l) => (<option key={l} value={l}>{l}</option>))}
-              </select>
-            </div>
-            <div className="space-y-1.5">
-              <label className="text-xs font-medium text-muted-foreground">Duration</label>
-              <div className="grid grid-cols-4 gap-1.5">
-                {DURATIONS.map((d) => (
-                  <button key={d} onClick={() => setConfig((p) => ({ ...p, durationMinutes: d }))}
-                    className={`px-1 py-2 text-xs rounded-lg border transition-colors text-center ${
-                      config.durationMinutes === d ? "bg-primary text-primary-foreground border-primary" : "border-border hover:bg-accent text-muted-foreground"
-                    }`}
-                  >
-                    {d}m
-                  </button>
-                ))}
-              </div>
-            </div>
-          </div>
-          <div className="flex justify-end gap-2 pt-2 border-t border-border">
-            <Button variant="outline" size="sm" onClick={() => setWizardStep(null)}>Cancel</Button>
-            <Button size="sm" onClick={() => setWizardStep(2)}>Next: Sections</Button>
-          </div>
-        </div>
+        <WizardStepDetails
+          config={config}
+          setConfig={setConfig}
+          companies={companies}
+          onNext={() => setWizardStep(2)}
+          onCancel={() => setWizardStep(null)}
+        />
       )}
 
       {wizardStep === 2 && (
-        <div className="rounded-xl border border-border bg-card p-6 space-y-5">
-          <div className="flex items-center justify-between flex-wrap gap-3">
-            <div>
-              <h3 className="text-sm font-semibold">Sections</h3>
-              <p className="text-xs text-muted-foreground mt-1">Add interview rounds by type. Each section can have its own difficulty and topics.</p>
-            </div>
-            <div className="flex gap-1.5 flex-wrap">
-              {SECTION_PRESETS.map((preset) => {
-                const Icon = TYPE_ICONS[preset.type];
-                const exists = config.sections.some((s) => s.type === preset.type);
-                return (
-                  <button key={preset.type} onClick={() => addSection(preset.type)} disabled={exists}
-                    className={`inline-flex items-center gap-1 px-2.5 py-1.5 text-xs rounded-lg border transition-colors ${
-                      exists ? "border-border/30 text-muted-foreground/30 cursor-not-allowed" : "border-border hover:bg-accent hover:text-foreground text-muted-foreground"
-                    }`}
-                  >
-                    <Icon className="size-3.5" /> {preset.type === "dsa" ? "DSA" : MOCK_TYPE_LABELS[preset.type]}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          {config.sections.length === 0 && (
-            <div className="rounded-lg border border-dashed border-border bg-card/50 p-8 text-center">
-              <Settings2 className="mx-auto size-8 text-muted-foreground/30 mb-2" />
-              <p className="text-sm text-muted-foreground">No sections yet</p>
-              <p className="text-xs text-muted-foreground/50 mt-1">Click a section type above to add it to your interview.</p>
-            </div>
-          )}
-
-          <div className="space-y-4">
-            {config.sections.map((section) => {
-              const Icon = TYPE_ICONS[section.type];
-              const searchKey = topicSearch[section.id] ?? "";
-              const filteredTopics = searchKey ? availableTopics.filter((t) => t.toLowerCase().includes(searchKey.toLowerCase())) : availableTopics;
-              return (
-                <div key={section.id} className="rounded-xl border border-border bg-secondary/20 p-5 space-y-4">
-                  <div className="flex items-center justify-between gap-3">
-                    <div className="flex items-center gap-2.5 min-w-0 flex-1">
-                      <div className="size-8 rounded-lg bg-secondary border border-border/60 flex items-center justify-center shrink-0">
-                        <Icon className="size-4 text-muted-foreground" />
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <Input value={section.title} onChange={(e) => updateSection(section.id, { title: e.target.value })}
-                          className="h-8 text-sm font-medium px-2 py-0 border-0 bg-transparent focus:bg-secondary hover:bg-secondary/50 rounded w-full"
-                        />
-                      </div>
-                      <span className="text-[11px] text-muted-foreground/60 px-2 py-0.5 rounded-md bg-secondary border border-border shrink-0">{MOCK_TYPE_LABELS[section.type]}</span>
-                    </div>
-                    <button onClick={() => removeSection(section.id)} className="size-7 flex items-center justify-center rounded-lg hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors shrink-0">
-                      <X className="size-3.5" />
-                    </button>
-                  </div>
-
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-                    <div className="space-y-1.5">
-                      <label className="text-[11px] font-medium text-muted-foreground">Questions</label>
-                      <div className="flex items-center gap-2">
-                        <button onClick={() => updateSection(section.id, { problemCount: Math.max(1, section.problemCount - 1) })} className="size-8 flex items-center justify-center rounded-lg border border-border hover:bg-accent transition-colors text-muted-foreground">−</button>
-                        <span className="flex-1 text-center text-sm font-semibold tabular-nums">{section.problemCount}</span>
-                        <button onClick={() => updateSection(section.id, { problemCount: Math.min(20, section.problemCount + 1) })} className="size-8 flex items-center justify-center rounded-lg border border-border hover:bg-accent transition-colors text-muted-foreground">+</button>
-                      </div>
-                    </div>
-
-                    <div className="space-y-1.5">
-                      <label className="text-[11px] font-medium text-muted-foreground">Difficulty</label>
-                      <div className="flex gap-1.5">
-                        {DIFFICULTIES.map((d) => (
-                          <button key={d} onClick={() => updateSection(section.id, { difficulties: section.difficulties.includes(d) ? section.difficulties.filter((x) => x !== d) : [...section.difficulties, d] })}
-                            className={`flex-1 px-2 py-1.5 text-xs rounded-lg border transition-colors ${
-                              section.difficulties.includes(d) ? "bg-primary text-primary-foreground border-primary" : "border-border hover:bg-accent text-muted-foreground"
-                            }`}
-                          >
-                            {d}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-
-                    {section.type === "dsa" && (
-                      <div className="space-y-1.5 sm:col-span-2">
-                        <label className="text-[11px] font-medium text-muted-foreground">Topics</label>
-                        <div className="relative">
-                          <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground/50" />
-                          <input type="text" value={searchKey} onChange={(e) => setTopicSearch((p) => ({ ...p, [section.id]: e.target.value }))} placeholder="Search topics..."
-                            className="w-full h-9 pl-8 pr-3 text-xs rounded-lg border border-border bg-secondary text-foreground outline-none placeholder:text-muted-foreground/40 focus:ring-1 focus:ring-primary"
-                          />
-                        </div>
-                        <div className="max-h-40 overflow-y-auto border border-border/50 rounded-lg p-2.5 bg-secondary/10 space-y-1">
-                          {section.topics.length > 0 && (
-                            <div className="flex flex-wrap gap-1 pb-2 mb-1 border-b border-border/30">
-                              {section.topics.map((t) => (
-                                <button key={t} onClick={() => updateSection(section.id, { topics: section.topics.filter((x) => x !== t) })}
-                                  className="inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full bg-primary/15 text-primary border border-primary/20 hover:bg-primary/25 transition-colors"
-                                >
-                                  {t} <X className="size-2.5" />
-                                </button>
-                              ))}
-                            </div>
-                          )}
-                          <div className="flex flex-wrap gap-1">
-                            {filteredTopics.length === 0 && <span className="text-[11px] text-muted-foreground/50 px-1 py-1">No topics match</span>}
-                            {filteredTopics.map((t) => {
-                              const isSelected = section.topics.includes(t);
-                              if (isSelected) return null;
-                              return (
-                                <button key={t} onClick={() => updateSection(section.id, { topics: [...section.topics, t] })}
-                                  className="text-[11px] px-2 py-0.5 rounded-full border border-border hover:bg-accent hover:text-foreground text-muted-foreground transition-colors"
-                                >
-                                  {t}
-                                </button>
-                              );
-                            })}
-                          </div>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-
-          <div className="flex items-center justify-between gap-3 pt-2 border-t border-border">
-            <Button variant="outline" size="sm" onClick={() => setWizardStep(1)}><ChevronLeft className="size-3.5 mr-1" /> Back</Button>
-            <div className="flex items-center gap-3">
-              <span className="text-xs text-muted-foreground tabular-nums">{totalQuestions} question{totalQuestions !== 1 ? "s" : ""} across {config.sections.length} section{config.sections.length !== 1 ? "s" : ""}</span>
-              <Button size="sm" disabled={config.sections.length === 0} onClick={() => setWizardStep(3)}>Next: Review</Button>
-            </div>
-          </div>
-        </div>
+        <WizardStepSections
+          config={config}
+          setConfig={setConfig}
+          availableTopics={availableTopics}
+          topicSearch={topicSearch}
+          setTopicSearch={setTopicSearch}
+          onBack={() => setWizardStep(1)}
+          onNext={() => setWizardStep(3)}
+        />
       )}
 
       {wizardStep === 3 && (
-        <div className="rounded-xl border border-border bg-card p-6 space-y-6">
-          <div>
-            <h3 className="text-sm font-semibold">Review &amp; Launch</h3>
-            <p className="text-xs text-muted-foreground mt-1">Confirm your interview configuration before starting.</p>
-          </div>
-
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            <div className="rounded-lg border border-border bg-secondary/30 p-3 text-center">
-              <p className="text-lg font-bold tabular-nums">{config.company || "Any"}</p>
-              <p className="text-[10px] text-muted-foreground mt-0.5">Company</p>
-            </div>
-            <div className="rounded-lg border border-border bg-secondary/30 p-3 text-center">
-              <p className="text-lg font-bold tabular-nums">{config.role || "—"}</p>
-              <p className="text-[10px] text-muted-foreground mt-0.5">Role</p>
-            </div>
-            <div className="rounded-lg border border-border bg-secondary/30 p-3 text-center">
-              <p className="text-lg font-bold tabular-nums">{config.level || "Any"}</p>
-              <p className="text-[10px] text-muted-foreground mt-0.5">Level</p>
-            </div>
-            <div className="rounded-lg border border-border bg-secondary/30 p-3 text-center">
-              <p className="text-lg font-bold tabular-nums">{config.durationMinutes}m</p>
-              <p className="text-[10px] text-muted-foreground mt-0.5">Duration</p>
-            </div>
-          </div>
-
-          <div className="space-y-3">
-            <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Sections ({config.sections.length})</h4>
-            <div className="space-y-2">
-              {config.sections.map((sec) => {
-                const Icon = TYPE_ICONS[sec.type];
-                return (
-                  <div key={sec.id} className="flex items-center gap-3 rounded-lg border border-border bg-secondary/20 px-4 py-3">
-                    <Icon className="size-4 text-muted-foreground shrink-0" />
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium truncate">{sec.title}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {sec.problemCount} question{sec.problemCount !== 1 ? "s" : ""} · {sec.difficulties.join(", ")}
-                        {sec.topics.length > 0 && ` · ${sec.topics.length} topic${sec.topics.length !== 1 ? "s" : ""}`}
-                      </p>
-                    </div>
-                    <span className="text-[11px] text-muted-foreground/60 px-2 py-0.5 rounded-md bg-secondary border border-border shrink-0">{MOCK_TYPE_LABELS[sec.type]}</span>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-
-          <div className="flex items-center justify-between gap-3 pt-2 border-t border-border">
-            <Button variant="outline" size="sm" onClick={() => setWizardStep(2)}><ChevronLeft className="size-3.5 mr-1" /> Back</Button>
-            <Button size="lg" onClick={startTest} className="px-8"><Play className="size-4 mr-2" /> Start Interview</Button>
-          </div>
-        </div>
+        <WizardStepReview
+          config={config}
+          allQuestions={allQuestions}
+          onBack={() => setWizardStep(2)}
+          onStart={startTest}
+        />
       )}
     </div>
   );
@@ -610,7 +442,7 @@ export default function MockTestPage() {
           </div>
 
           <div className="flex gap-3">
-            <Button onClick={() => { setConfig(buildDefaultConfig()); setWizardStep(1); }} className="flex-1 h-11 text-sm">
+            <Button onClick={() => { clearActiveSession(); setConfig(buildDefaultConfig()); setWizardStep(1); }} className="flex-1 h-11 text-sm">
               <Play className="size-4 mr-1.5" /> New Mock Interview
             </Button>
           </div>
@@ -655,7 +487,7 @@ export default function MockTestPage() {
               <Timer className="mx-auto size-10 text-muted-foreground/30" />
               <p className="text-sm font-medium text-foreground">No tests yet</p>
               <p className="text-xs text-muted-foreground max-w-sm mx-auto">Start your first mock interview to simulate real interview conditions and track your performance over time.</p>
-              <Button onClick={() => { setConfig(buildDefaultConfig()); setWizardStep(1); }} size="sm" className="mt-2"><Play className="size-3.5 mr-1.5" /> Start First Test</Button>
+              <Button onClick={() => { clearActiveSession(); setConfig(buildDefaultConfig()); setWizardStep(1); }} size="sm" className="mt-2"><Play className="size-3.5 mr-1.5" /> Start First Test</Button>
             </div>
           )}
         </div>

@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { AuthProvider } from "@/contexts/AuthContext";
+import { NotificationProvider } from "@/contexts/NotificationContext";
 import { Toaster } from "sonner";
 
 const geistSans = Geist({
@@ -69,8 +70,21 @@ export default function RootLayout({
         </head>
         <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
         <AuthProvider>
-          {children}
-          <Toaster richColors closeButton position="bottom-right" />
+          <NotificationProvider>
+            {children}
+            <Toaster
+              richColors
+              closeButton
+              position="bottom-right"
+              expand
+              visibleToasts={5}
+              gap={8}
+              toastOptions={{
+                duration: 4000,
+                style: { fontSize: "13px", padding: "12px 16px", borderRadius: "10px" },
+              }}
+            />
+          </NotificationProvider>
         </AuthProvider>
         </body>
         </html>

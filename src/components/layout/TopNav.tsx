@@ -6,27 +6,18 @@ import { memo, useState, useCallback, useEffect } from "react";
 import type { User } from "firebase/auth";
 import {
   BarChart3, CalendarDays, Crosshair, LayoutDashboard,
-  ListChecks, Menu, Moon, Search, Sun, Layers, Kanban, Bell,
-  CheckCircle2, Clock3, RotateCcw, Star,
+  ListChecks, Menu, Moon, Search, Sun, Layers, Kanban, Timer,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { useTheme } from "@/hooks/useTheme";
-import { useResources } from "@/hooks/useResources";
-import { useResourceProgress } from "@/hooks/useResourceProgress";
-import { useSprints } from "@/hooks/useSprints";
+
 import { Logo } from "@/components/ui/logo";
 import { Sheet, SheetContent, SheetTrigger, SheetClose } from "@/components/ui/sheet";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+
 import UserMenu from "./UserMenu";
 import CommandCenter from "./CommandCenter";
+import { NotificationCenter } from "@/components/notifications/NotificationCenter";
 
 interface TopNavProps {
   user?: User | null;
@@ -44,6 +35,7 @@ const navItems = [
   { label: "Progress", href: "/progress", icon: BarChart3 },
   { label: "Activity", href: "/activity", icon: CalendarDays },
   { label: "Readiness", href: "/readiness", icon: Crosshair },
+  { label: "Mock Interview", href: "/mock-test", icon: Timer },
 ] as const;
 
 const NavLink = memo(function NavLink({
@@ -106,115 +98,6 @@ function SearchTrigger({ onClick }: { onClick: () => void }) {
       <span className="flex-1 text-left">Search...</span>
       <kbd className="hidden h-4 items-center rounded border border-border/80 bg-background px-1 font-mono text-[10px] text-muted-foreground/50 lg:inline-flex">⌘K</kbd>
     </button>
-  );
-}
-
-function NotificationContent({ uid }: { uid?: string | null }) {
-  const { resources } = useResources(uid ?? undefined);
-  const { progressMap } = useResourceProgress(uid ?? undefined);
-  const { sprints } = useSprints(uid ?? undefined);
-
-  const activeSprint = sprints.find((sprint) => sprint.status === "active");
-  const revisionCount = resources.filter((resource) => progressMap[resource.id]?.inRevisionList).length;
-  const favoriteCount = resources.filter((resource) => progressMap[resource.id]?.favorited).length;
-  const inProgressCount = resources.filter((resource) => progressMap[resource.id]?.status === "in-progress").length;
-  const signalCount = Number(Boolean(activeSprint)) + Number(revisionCount > 0) + Number(inProgressCount > 0);
-
-  return (
-    <DropdownMenuContent align="end" className="w-80 border-border bg-card p-1 text-foreground shadow-lg">
-        <DropdownMenuLabel className="px-3 py-2.5">
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <div className="text-sm font-semibold">Prep Signals</div>
-              <div className="text-xs font-normal text-muted-foreground">
-                {uid ? "Smart reminders from your workspace" : "Sign in to enable live reminders"}
-              </div>
-            </div>
-            {uid && signalCount > 0 && (
-              <span className="rounded-md border border-success/20 bg-success/10 px-2 py-1 text-[10px] font-medium text-success">
-                {signalCount} active
-              </span>
-            )}
-          </div>
-        </DropdownMenuLabel>
-        <DropdownMenuSeparator className="bg-border" />
-        {!uid ? (
-          <DropdownMenuItem disabled className="items-start gap-3 px-3 py-3">
-            <Clock3 className="mt-0.5 size-4" />
-            <span className="text-xs text-muted-foreground">Your sprint, revision, and resource reminders will appear here after sign in.</span>
-          </DropdownMenuItem>
-        ) : (
-          <>
-            <DropdownMenuItem asChild className="cursor-pointer px-3 py-2.5">
-              <Link href="/sprints" className="flex items-start gap-3">
-                <Kanban className="mt-0.5 size-4 text-success" />
-                <span className="min-w-0">
-                  <span className="block text-sm font-medium">{activeSprint ? activeSprint.name : "No active sprint"}</span>
-                  <span className="block text-xs text-muted-foreground">{activeSprint ? "Keep your current sprint moving" : "Create a sprint to focus this week"}</span>
-                </span>
-              </Link>
-            </DropdownMenuItem>
-            <DropdownMenuItem asChild className="cursor-pointer px-3 py-2.5">
-              <Link href="/tracks" className="flex items-start gap-3">
-                <RotateCcw className="mt-0.5 size-4 text-cyan-400" />
-                <span className="min-w-0">
-                  <span className="block text-sm font-medium">{revisionCount} resources in revision</span>
-                  <span className="block text-xs text-muted-foreground">Review saved learning items before they go cold</span>
-                </span>
-              </Link>
-            </DropdownMenuItem>
-            <DropdownMenuItem asChild className="cursor-pointer px-3 py-2.5">
-              <Link href="/tracks" className="flex items-start gap-3">
-                <Clock3 className="mt-0.5 size-4 text-warning" />
-                <span className="min-w-0">
-                  <span className="block text-sm font-medium">{inProgressCount} resources in progress</span>
-                  <span className="block text-xs text-muted-foreground">Finish active learning items to improve readiness</span>
-                </span>
-              </Link>
-            </DropdownMenuItem>
-            <DropdownMenuItem asChild className="cursor-pointer px-3 py-2.5">
-              <Link href="/tracks" className="flex items-start gap-3">
-                <Star className="mt-0.5 size-4 text-warning" />
-                <span className="min-w-0">
-                  <span className="block text-sm font-medium">{favoriteCount} favorite resources</span>
-                  <span className="block text-xs text-muted-foreground">Pinned items are ready for quick practice</span>
-                </span>
-              </Link>
-            </DropdownMenuItem>
-            {signalCount === 0 && (
-              <>
-                <DropdownMenuSeparator className="bg-border" />
-                <DropdownMenuItem disabled className="items-start gap-3 px-3 py-3">
-                  <CheckCircle2 className="mt-0.5 size-4 text-success" />
-                  <span className="text-xs text-muted-foreground">No urgent signals right now. Your workspace is clear.</span>
-                </DropdownMenuItem>
-              </>
-            )}
-          </>
-        )}
-    </DropdownMenuContent>
-  );
-}
-
-function NotificationMenu({ uid }: { uid?: string | null }) {
-  const [open, setOpen] = useState(false);
-
-  return (
-    <DropdownMenu open={open} onOpenChange={setOpen}>
-      <DropdownMenuTrigger asChild>
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          className="relative hidden size-8 text-muted-foreground hover:text-foreground sm:inline-flex"
-          aria-label="Open notifications"
-        >
-          <Bell className="size-4" />
-          {open && <span className="absolute right-1.5 top-1.5 size-2 rounded-full bg-success ring-2 ring-background" />}
-        </Button>
-      </DropdownMenuTrigger>
-      {open && <NotificationContent uid={uid} />}
-    </DropdownMenu>
   );
 }
 
@@ -302,7 +185,7 @@ const TopNav = ({
 
           <ThemeToggle />
 
-          <NotificationMenu uid={user?.uid} />
+          <NotificationCenter />
 
           <UserMenu
             user={user}
