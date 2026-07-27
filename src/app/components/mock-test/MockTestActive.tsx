@@ -65,6 +65,10 @@ export default function MockTestActive({
     problemIndices: problems.reduce<number[]>((acc, p, i) => { if (p.sectionId === sec.id) acc.push(i); return acc; }, []),
   }));
 
+  const sectionGroup = sectionGroups.find((g) => g.section.id === currentProblem?.sectionId);
+  const problemOffset = sectionGroup?.problemIndices.indexOf(currentIndex) ?? -1;
+  const resolvedQuestionText = currentProblem.questionText ?? currentSection?.customQuestions?.[problemOffset];
+
   const navigatorQuestions = problems.map((p, i) => ({
     index: i,
     problem: p,
@@ -245,7 +249,7 @@ export default function MockTestActive({
                       )}
                     </div>
                     <h2 className="text-lg sm:text-xl font-semibold leading-snug">
-                      {currentProblem.questionText || currentProblem.title}
+                      {resolvedQuestionText || currentProblem.title}
                     </h2>
                     <div className="flex items-center gap-3 flex-wrap">
                       <DifficultyBadge difficulty={currentProblem.difficulty} />
@@ -268,12 +272,12 @@ export default function MockTestActive({
 
                 {currentProblem.sectionType !== "dsa" && (
                   <div className="rounded-xl border border-border bg-card/50 p-4 sm:p-5 space-y-4">
-                    {currentProblem.questionText ? (
+                    {resolvedQuestionText ? (
                       <div className="rounded-lg border border-primary/20 bg-gradient-to-br from-primary/[0.04] to-primary/[0.02] p-4">
                         <p className="text-[11px] font-semibold text-primary uppercase tracking-wider mb-2 flex items-center gap-1.5">
                           <HelpCircle className="size-3.5" /> Question
                         </p>
-                        <p className="text-sm text-foreground/90 leading-relaxed">{currentProblem.questionText}</p>
+                        <p className="text-sm text-foreground/90 leading-relaxed">{resolvedQuestionText}</p>
                       </div>
                     ) : (
                       <div className="rounded-lg border border-dashed border-border/60 bg-secondary/20 p-4 text-center">

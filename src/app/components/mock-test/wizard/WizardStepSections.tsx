@@ -15,12 +15,12 @@ const TYPE_ICONS: Record<MockInterviewType, LucideIcon> = {
 const DIFFICULTIES = ["Easy", "Medium", "Hard"] as const;
 
 const SECTION_PRESETS: { type: MockInterviewType; count: number; title: string }[] = [
-  { type: "dsa", count: 3, title: "Coding Problems" },
+  { type: "dsa", count: 1, title: "Coding Problems" },
   { type: "system-design", count: 1, title: "System Design" },
-  { type: "behavioral", count: 2, title: "Behavioral Questions" },
-  { type: "backend", count: 2, title: "Backend Deep Dive" },
-  { type: "leadership", count: 2, title: "Leadership Principles" },
-  { type: "ai-ml", count: 2, title: "AI/ML Questions" },
+  { type: "behavioral", count: 1, title: "Behavioral Questions" },
+  { type: "backend", count: 1, title: "Backend Deep Dive" },
+  { type: "leadership", count: 1, title: "Leadership Principles" },
+  { type: "ai-ml", count: 1, title: "AI/ML Questions" },
 ];
 
 interface WizardStepSectionsProps {

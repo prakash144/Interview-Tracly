@@ -74,7 +74,7 @@ type WizardStep = 1 | 2 | 3;
 
 function buildDefaultConfig(): MockInterviewConfig {
   return {
-    sections: [{ id: generateSectionId(), type: "dsa", title: "Coding Problems", problemCount: 5, difficulties: ["Easy", "Medium"], topics: [], tags: [], customQuestions: [] }],
+    sections: [{ id: generateSectionId(), type: "dsa", title: "Coding Problems", problemCount: 1, difficulties: ["Easy", "Medium"], topics: [], tags: [], customQuestions: [] }],
     company: "", role: "", level: "", durationMinutes: 30, round: "",
   };
 }

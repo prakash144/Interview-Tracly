@@ -128,7 +128,7 @@ describe("WizardStepSections", () => {
       expect(config.sections).toHaveLength(1);
       expect(config.sections[0].type).toBe("dsa");
       expect(config.sections[0].title).toBe("Coding Problems");
-      expect(config.sections[0].problemCount).toBe(3);
+      expect(config.sections[0].problemCount).toBe(1);
       expect(config.sections[0].customQuestions).toEqual([]);
     });
 
@@ -149,7 +149,7 @@ describe("WizardStepSections", () => {
       const config = getConfig();
       expect(config.sections).toHaveLength(1);
       expect(config.sections[0].type).toBe("behavioral");
-      expect(config.sections[0].problemCount).toBe(2);
+      expect(config.sections[0].problemCount).toBe(1);
     });
 
     it("disables a preset button once a section of that type exists", async () => {
@@ -178,7 +178,7 @@ describe("WizardStepSections", () => {
       rerender();
       await userEvent.click(screen.getByText("System Design"));
       rerender();
-      expect(screen.getByText("4 questions across 2 sections")).toBeInTheDocument();
+      expect(screen.getByText("2 questions across 2 sections")).toBeInTheDocument();
     });
   });
 
@@ -268,7 +268,7 @@ describe("WizardStepSections", () => {
       const plusBtn = screen.getAllByText("+")[0];
       await userEvent.click(plusBtn);
       rerender();
-      expect(getConfig().sections[0].problemCount).toBe(4);
+      expect(getConfig().sections[0].problemCount).toBe(2);
     });
 
     it("decrements problem count", async () => {
@@ -279,7 +279,7 @@ describe("WizardStepSections", () => {
       const minusBtn = screen.getAllByText("−")[0];
       await userEvent.click(minusBtn);
       rerender();
-      expect(getConfig().sections[0].problemCount).toBe(2);
+      expect(getConfig().sections[0].problemCount).toBe(1);
     });
 
     it("does not decrement below 1", async () => {
