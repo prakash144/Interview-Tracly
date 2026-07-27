@@ -36,8 +36,8 @@ const USER_COLLECTIONS = [
 ];
 
 function getOAuthClient() {
-  const { client_id, client_secret, redirect_uris } = JSON.parse(readFileSync(OAUTH_CLIENT_PATH, "utf-8")).installed || JSON.parse(readFileSync(OAUTH_CLIENT_PATH, "utf-8")).web;
-  return new google.auth.OAuth2(client_id, client_secret, redirect_uris?.[0] || "http://localhost");
+  const { client_id, client_secret } = JSON.parse(readFileSync(OAUTH_CLIENT_PATH, "utf-8")).installed || JSON.parse(readFileSync(OAUTH_CLIENT_PATH, "utf-8")).web;
+  return new google.auth.OAuth2(client_id, client_secret, "urn:ietf:wg:oauth:2.0:oob");
 }
 
 async function loadSavedToken(client) {
@@ -60,8 +60,9 @@ async function loadSavedToken(client) {
 
 async function authorizeNewToken(client) {
   const url = client.generateAuthUrl({ access_type: "offline", scope: SCOPES });
-  console.log("\n  Open this URL in your browser:\n");
+  console.log("\n  Open this URL in your browser and sign in:\n");
   console.log("  " + url + "\n");
+  console.log("  After authorizing, Google will show a code. Copy and paste it below.\n");
 
   try {
     execSync(`open "${url}"`, { stdio: "ignore" });
@@ -70,7 +71,7 @@ async function authorizeNewToken(client) {
   }
 
   const rl = createInterface({ input: process.stdin, output: process.stdout });
-  const code = await new Promise((resolve) => rl.question("  Paste the authorization code here: ", resolve));
+  const code = await new Promise((resolve) => rl.question("  Paste the authorization code: ", resolve));
   rl.close();
 
   const { tokens } = await client.getToken(code.trim());
