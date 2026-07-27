@@ -1,7 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { useState, type ReactNode } from "react";
 import WizardStepSections from "@/app/components/mock-test/wizard/WizardStepSections";
 import type { MockInterviewConfig } from "@/lib/mockTest";
 
@@ -23,17 +22,6 @@ function emptyConfig(): MockInterviewConfig {
     durationMinutes: 30,
     round: "",
   };
-}
-
-function Wrapper({
-  initialConfig,
-  children,
-}: {
-  initialConfig: MockInterviewConfig;
-  children: (config: MockInterviewConfig, setConfig: (c: MockInterviewConfig | ((prev: MockInterviewConfig) => MockInterviewConfig)) => void) => ReactNode;
-}) {
-  const [config, setConfig] = useState(initialConfig);
-  return <>{children(config, setConfig)}</>;
 }
 
 function renderWithState(overrides: Partial<MockInterviewConfig> = {}) {
