@@ -202,19 +202,70 @@ Firestore on the Spark (free) tier doesn't include automated exports. This scrip
 
 ### Setup (one-time)
 
-1. Go to **Firebase Console → Project Settings → Service Accounts**
-2. Click **Generate new private key** and download the JSON
-3. Save it as `service-account.json` in the project root
-4. Share your backup Drive folder with the service account email (found in `service-account.json` under `client_email`)
-5. Open `scripts/backup.mjs` and set `DRIVE_FOLDER_ID` to your target folder ID
+#### Step 1: Get your Firebase service account key
 
-### Run
+1. Open [Firebase Console](https://console.firebase.google.com) → select your project
+2. Go to **Project Settings** (gear icon) → **Service Accounts** tab
+3. Click **Generate new private key** → a JSON file downloads automatically
+4. Rename it to `service-account.json` and place it in the project root (next to `package.json`)
+
+> **Warning:** `service-account.json` is git-ignored. Never commit it to a public repository.
+
+#### Step 2: Create a Google Drive folder for backups
+
+1. Go to [drive.google.com](https://drive.google.com)
+2. Create a new folder (e.g., "Interview-Tracly Backups")
+3. Open the folder — the URL will look like: `https://drive.google.com/drive/folders/ABC123xyz...`
+4. Copy the folder ID (the long string after `folders/` in the URL)
+
+#### Step 3: Grant the service account access to your folder
+
+1. Open your backup folder in Google Drive
+2. Right-click the folder → **Share** → **Share**
+3. In the "Add people and groups" field, paste the **client_email** from `service-account.json`
+4. Set permission to **Editor** and click **Send**
+
+#### Step 4: Set the folder ID in the script
+
+1. Open `scripts/backup.mjs`
+2. Find this line near the top:
+
+```js
+const DRIVE_FOLDER_ID = "your-folder-id-here";
+```
+
+3. Replace `"your-folder-id-here"` with your actual folder ID from Step 2
+
+### Run a backup
 
 ```bash
 npm run backup
 ```
 
-A JSON file is saved locally and uploaded to your Drive folder. The filename includes a timestamp, e.g. `backup-2026-07-28T12-00-00-000Z.json`.
+### What happens
+
+| Step | Output |
+|---|---|
+| 1 | Script connects to Firestore using the service account |
+| 2 | Exports all collections: tracks, resources, progress, sprints, activity, custom lists (including sprint tasks) |
+| 3 | Saves a timestamped JSON file locally (e.g. `backup-2026-07-28T12-00-00-000Z.json`) |
+| 4 | Uploads the same file to your Google Drive folder |
+| 5 | Prints the Drive file link for confirmation |
+
+### Restoring from a backup
+
+To restore, use the Firebase Console:
+
+1. Go to **Firebase Console → Firestore → Start collection**
+2. Manually re-create collections/documents from the backup JSON
+
+Or use the Firebase CLI:
+
+```bash
+npm install -g firebase-tools
+firebase login
+# For each collection (not automated — use the backup JSON as reference)
+```
 
 ---
 
