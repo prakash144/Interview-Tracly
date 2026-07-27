@@ -73,12 +73,12 @@ async function dumpFirestore() {
 }
 
 async function uploadToDrive(filePath, fileName) {
-  const auth = new google.auth.JWT(
-    sa.client_email,
-    null,
-    sa.private_key,
-    ["https://www.googleapis.com/auth/drive.file"]
-  );
+  const auth = new google.auth.JWT({
+    email: sa.client_email,
+    key: sa.private_key,
+    scopes: ["https://www.googleapis.com/auth/drive.file"],
+  });
+  await auth.authorize();
   const drive = google.drive({ version: "v3", auth });
 
   const res = await drive.files.create({
