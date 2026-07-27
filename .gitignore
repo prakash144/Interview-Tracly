@@ -37,6 +37,12 @@ yarn-error.log*
 # vercel
 .vercel
 
+# firebase service account (sensitive credentials)
+service-account.json
+
+# backup files
+backup-*.json
+
 # typescript
 *.tsbuildinfo
 next-env.d.ts

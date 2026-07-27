@@ -158,7 +158,7 @@ Real-time score (0–100%) computed from company coverage, topic coverage, diffi
 | **Calendar sync** | No Google Calendar / Outlook integration (dates are manual) |
 | **Offline mode** | Static export works after first load but no service worker yet |
 | **Anonymous sign-in** | Google-only auth; no email/password or anonymous mode |
-| **Data export/import** | No JSON export/import yet (Firestore data only) |
+| **Data export/import** | JSON export via `npm run backup` (see Backup section) |
 
 ---
 
@@ -193,6 +193,28 @@ NEXT_PUBLIC_FIREBASE_APP_ID=
 ```
 
 Firestore stores only user-specific data (progress, sprints, tracks, resources, activity). Problem metadata comes from GitHub CSVs. Deploy `firestore.rules` to protect per-user data.
+
+---
+
+## Backup
+
+Firestore on the Spark (free) tier doesn't include automated exports. This script backs up all user data (tracks, resources, progress, sprints, activity, custom lists) as a single JSON file and uploads it to your Google Drive.
+
+### Setup (one-time)
+
+1. Go to **Firebase Console → Project Settings → Service Accounts**
+2. Click **Generate new private key** and download the JSON
+3. Save it as `service-account.json` in the project root
+4. Share your backup Drive folder with the service account email (found in `service-account.json` under `client_email`)
+5. Open `scripts/backup.mjs` and set `DRIVE_FOLDER_ID` to your target folder ID
+
+### Run
+
+```bash
+npm run backup
+```
+
+A JSON file is saved locally and uploaded to your Drive folder. The filename includes a timestamp, e.g. `backup-2026-07-28T12-00-00-000Z.json`.
 
 ---
 
