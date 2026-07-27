@@ -37,10 +37,13 @@ yarn-error.log*
 # vercel
 .vercel
 
-# firebase service account (sensitive credentials)
+# service account & oauth credentials (sensitive)
 service-account.json
+oauth-client.json
+drive-token.json
 
 # backup files
+firebase-bkp/
 backup-*.json
 
 # typescript

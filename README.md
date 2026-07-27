@@ -211,19 +211,21 @@ Firestore on the Spark (free) tier doesn't include automated exports. This scrip
 
 > **Warning:** `service-account.json` is git-ignored. Never commit it to a public repository.
 
-#### Step 2: Create a Google Drive folder for backups
+#### Step 2: Create an OAuth 2.0 client ID (for Drive upload)
+
+1. Go to [Google Cloud Console → APIs & Services → Credentials](https://console.cloud.google.com/apis/credentials)
+2. Click **Create Credentials → OAuth 2.0 Client ID**
+3. Select **Desktop app** as the application type
+4. Give it any name (e.g., "Interview-Tracly Backup")
+5. Click **Create**, then **Download JSON**
+6. Save the file as `oauth-client.json` in the project root
+
+#### Step 3: Create a Google Drive folder for backups
 
 1. Go to [drive.google.com](https://drive.google.com)
 2. Create a new folder (e.g., "Interview-Tracly Backups")
 3. Open the folder — the URL will look like: `https://drive.google.com/drive/folders/ABC123xyz...`
 4. Copy the folder ID (the long string after `folders/` in the URL)
-
-#### Step 3: Grant the service account access to your folder
-
-1. Open your backup folder in Google Drive
-2. Right-click the folder → **Share** → **Share**
-3. In the "Add people and groups" field, paste the **client_email** from `service-account.json`
-4. Set permission to **Editor** and click **Send**
 
 #### Step 4: Set the folder ID in the script
 
@@ -234,13 +236,15 @@ Firestore on the Spark (free) tier doesn't include automated exports. This scrip
 const DRIVE_FOLDER_ID = "your-folder-id-here";
 ```
 
-3. Replace `"your-folder-id-here"` with your actual folder ID from Step 2
+3. Replace `"your-folder-id-here"` with your actual folder ID from Step 3
 
 ### Run a backup
 
 ```bash
 npm run backup
 ```
+
+**First run:** a browser tab opens asking you to authorize the app. Paste the authorization code back into the terminal. This only happens once — the token is saved as `drive-token.json` for future runs.
 
 ### What happens
 
@@ -258,14 +262,6 @@ To restore, use the Firebase Console:
 
 1. Go to **Firebase Console → Firestore → Start collection**
 2. Manually re-create collections/documents from the backup JSON
-
-Or use the Firebase CLI:
-
-```bash
-npm install -g firebase-tools
-firebase login
-# For each collection (not automated — use the backup JSON as reference)
-```
 
 ---
 
